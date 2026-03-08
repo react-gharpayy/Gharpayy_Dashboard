@@ -46,6 +46,7 @@ const App = () => (
           <Route path="/availability" element={<ProtectedRoute><Availability /></ProtectedRoute>} />
           <Route path="/matching" element={<ProtectedRoute><Matching /></ProtectedRoute>} />
           <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
+          <Route path="/zones" element={<ProtectedRoute><ZoneManagement /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
