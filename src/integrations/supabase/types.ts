@@ -89,6 +89,94 @@ export type Database = {
         }
         Relationships: []
       }
+      bed_status_log: {
+        Row: {
+          bed_id: string
+          changed_by: string | null
+          created_at: string
+          id: string
+          new_status: Database["public"]["Enums"]["bed_status"]
+          notes: string | null
+          old_status: Database["public"]["Enums"]["bed_status"] | null
+        }
+        Insert: {
+          bed_id: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_status: Database["public"]["Enums"]["bed_status"]
+          notes?: string | null
+          old_status?: Database["public"]["Enums"]["bed_status"] | null
+        }
+        Update: {
+          bed_id?: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_status?: Database["public"]["Enums"]["bed_status"]
+          notes?: string | null
+          old_status?: Database["public"]["Enums"]["bed_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bed_status_log_bed_id_fkey"
+            columns: ["bed_id"]
+            isOneToOne: false
+            referencedRelation: "beds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      beds: {
+        Row: {
+          bed_number: string
+          created_at: string
+          current_rent: number | null
+          current_tenant_name: string | null
+          id: string
+          move_in_date: string | null
+          move_out_date: string | null
+          notes: string | null
+          room_id: string
+          status: Database["public"]["Enums"]["bed_status"]
+          updated_at: string
+        }
+        Insert: {
+          bed_number: string
+          created_at?: string
+          current_rent?: number | null
+          current_tenant_name?: string | null
+          id?: string
+          move_in_date?: string | null
+          move_out_date?: string | null
+          notes?: string | null
+          room_id: string
+          status?: Database["public"]["Enums"]["bed_status"]
+          updated_at?: string
+        }
+        Update: {
+          bed_number?: string
+          created_at?: string
+          current_rent?: number | null
+          current_tenant_name?: string | null
+          id?: string
+          move_in_date?: string | null
+          move_out_date?: string | null
+          notes?: string | null
+          room_id?: string
+          status?: Database["public"]["Enums"]["bed_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beds_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           agent_id: string | null
@@ -380,36 +468,60 @@ export type Database = {
       properties: {
         Row: {
           address: string | null
+          amenities: string[] | null
           area: string | null
           city: string | null
           created_at: string
+          gender_allowed: string | null
+          google_maps_link: string | null
           id: string
           is_active: boolean
           name: string
           owner_id: string | null
+          photos: string[] | null
           price_range: string | null
+          property_manager: string | null
+          total_beds: number | null
+          total_rooms: number | null
+          virtual_tour_link: string | null
         }
         Insert: {
           address?: string | null
+          amenities?: string[] | null
           area?: string | null
           city?: string | null
           created_at?: string
+          gender_allowed?: string | null
+          google_maps_link?: string | null
           id?: string
           is_active?: boolean
           name: string
           owner_id?: string | null
+          photos?: string[] | null
           price_range?: string | null
+          property_manager?: string | null
+          total_beds?: number | null
+          total_rooms?: number | null
+          virtual_tour_link?: string | null
         }
         Update: {
           address?: string | null
+          amenities?: string[] | null
           area?: string | null
           city?: string | null
           created_at?: string
+          gender_allowed?: string | null
+          google_maps_link?: string | null
           id?: string
           is_active?: boolean
           name?: string
           owner_id?: string | null
+          photos?: string[] | null
           price_range?: string | null
+          property_manager?: string | null
+          total_beds?: number | null
+          total_rooms?: number | null
+          virtual_tour_link?: string | null
         }
         Relationships: [
           {
@@ -471,15 +583,19 @@ export type Database = {
           actual_rent: number | null
           amenities: string[] | null
           auto_locked: boolean
+          bathroom_type: string | null
           bed_count: number
           created_at: string
           expected_rent: number | null
           floor: string | null
+          furnishing: string | null
           id: string
           last_confirmed_at: string | null
           min_acceptable_rent: number | null
           notes: string | null
           property_id: string
+          rent_per_bed: number | null
+          room_code: string | null
           room_number: string
           room_type: string | null
           status: Database["public"]["Enums"]["room_status"]
@@ -490,15 +606,19 @@ export type Database = {
           actual_rent?: number | null
           amenities?: string[] | null
           auto_locked?: boolean
+          bathroom_type?: string | null
           bed_count?: number
           created_at?: string
           expected_rent?: number | null
           floor?: string | null
+          furnishing?: string | null
           id?: string
           last_confirmed_at?: string | null
           min_acceptable_rent?: number | null
           notes?: string | null
           property_id: string
+          rent_per_bed?: number | null
+          room_code?: string | null
           room_number: string
           room_type?: string | null
           status?: Database["public"]["Enums"]["room_status"]
@@ -509,15 +629,19 @@ export type Database = {
           actual_rent?: number | null
           amenities?: string[] | null
           auto_locked?: boolean
+          bathroom_type?: string | null
           bed_count?: number
           created_at?: string
           expected_rent?: number | null
           floor?: string | null
+          furnishing?: string | null
           id?: string
           last_confirmed_at?: string | null
           min_acceptable_rent?: number | null
           notes?: string | null
           property_id?: string
+          rent_per_bed?: number | null
+          room_code?: string | null
           room_number?: string
           room_type?: string | null
           status?: Database["public"]["Enums"]["room_status"]
@@ -536,6 +660,7 @@ export type Database = {
       }
       soft_locks: {
         Row: {
+          bed_id: string | null
           created_at: string
           expires_at: string
           id: string
@@ -548,6 +673,7 @@ export type Database = {
           room_id: string
         }
         Insert: {
+          bed_id?: string | null
           created_at?: string
           expires_at: string
           id?: string
@@ -560,6 +686,7 @@ export type Database = {
           room_id: string
         }
         Update: {
+          bed_id?: string | null
           created_at?: string
           expires_at?: string
           id?: string
@@ -572,6 +699,13 @@ export type Database = {
           room_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "soft_locks_bed_id_fkey"
+            columns: ["bed_id"]
+            isOneToOne: false
+            referencedRelation: "beds"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "soft_locks_lead_id_fkey"
             columns: ["lead_id"]
@@ -598,6 +732,7 @@ export type Database = {
       visits: {
         Row: {
           assigned_staff_id: string | null
+          bed_id: string | null
           confirmed: boolean
           created_at: string
           id: string
@@ -605,11 +740,13 @@ export type Database = {
           notes: string | null
           outcome: Database["public"]["Enums"]["visit_outcome"] | null
           property_id: string
+          room_id: string | null
           scheduled_at: string
           updated_at: string
         }
         Insert: {
           assigned_staff_id?: string | null
+          bed_id?: string | null
           confirmed?: boolean
           created_at?: string
           id?: string
@@ -617,11 +754,13 @@ export type Database = {
           notes?: string | null
           outcome?: Database["public"]["Enums"]["visit_outcome"] | null
           property_id: string
+          room_id?: string | null
           scheduled_at: string
           updated_at?: string
         }
         Update: {
           assigned_staff_id?: string | null
+          bed_id?: string | null
           confirmed?: boolean
           created_at?: string
           id?: string
@@ -629,6 +768,7 @@ export type Database = {
           notes?: string | null
           outcome?: Database["public"]["Enums"]["visit_outcome"] | null
           property_id?: string
+          room_id?: string | null
           scheduled_at?: string
           updated_at?: string
         }
@@ -638,6 +778,13 @@ export type Database = {
             columns: ["assigned_staff_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visits_bed_id_fkey"
+            columns: ["bed_id"]
+            isOneToOne: false
+            referencedRelation: "beds"
             referencedColumns: ["id"]
           },
           {
@@ -654,6 +801,13 @@ export type Database = {
             referencedRelation: "properties"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "visits_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
@@ -667,6 +821,13 @@ export type Database = {
       recalculate_all_lead_scores: { Args: never; Returns: undefined }
     }
     Enums: {
+      bed_status:
+        | "vacant"
+        | "occupied"
+        | "vacating_soon"
+        | "blocked"
+        | "reserved"
+        | "booked"
       lead_source:
         | "whatsapp"
         | "website"
@@ -813,6 +974,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      bed_status: [
+        "vacant",
+        "occupied",
+        "vacating_soon",
+        "blocked",
+        "reserved",
+        "booked",
+      ],
       lead_source: [
         "whatsapp",
         "website",
