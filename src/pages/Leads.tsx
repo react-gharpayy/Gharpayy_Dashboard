@@ -37,7 +37,12 @@ const Leads = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedLead, setSelectedLead] = useState<LeadWithRelations | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { data: leads, isLoading } = useLeads();
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+  const { data: paginatedData, isLoading } = useLeadsPaginated(page, PAGE_SIZE);
+  const leads = paginatedData?.leads;
+  const totalLeads = paginatedData?.total ?? 0;
+  const totalPages = Math.ceil(totalLeads / PAGE_SIZE);
   const { data: agents } = useAgents();
   const bulkUpdate = useBulkUpdateLeads();
   const deleteLeads = useDeleteLeads();
