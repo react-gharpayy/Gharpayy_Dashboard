@@ -9,9 +9,11 @@ import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
 import { useUpdateLead, useAgents, type LeadWithRelations } from '@/hooks/useCrmData';
 import { useConversations, useFollowUps, useCreateFollowUp } from '@/hooks/useLeadDetails';
 import { useActivityLog } from '@/hooks/useActivityLog';
+import { useBookingsByLead } from '@/hooks/useBookings';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Phone, Mail, MapPin, IndianRupee, Clock, MessageCircle, CalendarCheck, User, Star, Send, Bell, ArrowRightLeft, Eye, Activity } from 'lucide-react';
+import { Phone, Mail, MapPin, IndianRupee, Clock, MessageCircle, CalendarCheck, User, Star, Send, Bell, ArrowRightLeft, Eye, Activity, Sparkles, Loader2, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
   lead: LeadWithRelations | null;
