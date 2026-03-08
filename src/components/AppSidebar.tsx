@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Kanban, CalendarCheck, BarChart3, Settings,
   MessageSquare, History, X, Moon, Sun, Building2, Bed, TrendingUp,
-  Map, Sparkles, Receipt, Globe,
+  Map, Sparkles, Receipt, Globe, UserCircle,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -25,6 +25,10 @@ const supplyItems = [
   { to: '/effort', icon: TrendingUp, label: 'Effort' },
   { to: '/matching', icon: Sparkles, label: 'Matching' },
   { to: '/zones', icon: Globe, label: 'Zones' },
+];
+
+const portalItems = [
+  { to: '/owner-portal', icon: UserCircle, label: 'Owner Portal' },
 ];
 
 const AppSidebar = ({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) => {
@@ -80,6 +84,7 @@ const AppSidebar = ({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => voi
         <nav className="flex-1 px-2 overflow-y-auto space-y-0.5">
           {renderGroup('Demand', salesItems)}
           {renderGroup('Supply', supplyItems)}
+          {renderGroup('Portals', portalItems)}
         </nav>
 
         {/* Footer */}
