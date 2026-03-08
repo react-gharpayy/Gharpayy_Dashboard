@@ -63,8 +63,8 @@ export default function LandingPage() {
             </div>
             <div className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
               <button onClick={() => navigate('/explore')} className="hover:text-foreground transition-colors font-medium">Explore PGs</button>
-              <button className="hover:text-foreground transition-colors">For Owners</button>
-              <button className="hover:text-foreground transition-colors">About</button>
+              <button onClick={() => navigate('/owner-portal')} className="hover:text-foreground transition-colors">For Owners</button>
+              <button onClick={() => navigate('/explore')} className="hover:text-foreground transition-colors">About</button>
             </div>
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>Login</Button>
