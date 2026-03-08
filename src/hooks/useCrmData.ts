@@ -19,17 +19,20 @@ export type VisitWithRelations = Visit & {
   agents: Pick<Agent, 'id' | 'name'> | null;
 };
 
-// Leads
-export const useLeads = () =>
+// Leads (paginated)
+export const useLeads = (page = 0, pageSize = 50) =>
   useQuery({
-    queryKey: ['leads'],
+    queryKey: ['leads', page, pageSize],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+      const { data, error, count } = await supabase
         .from('leads')
-        .select('*, agents(id, name), properties(id, name)')
-        .order('created_at', { ascending: false });
+        .select('*, agents(id, name), properties(id, name)', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
       if (error) throw error;
-      return data as LeadWithRelations[];
+      return { leads: data as LeadWithRelations[], total: count || 0 };
     },
   });
 
