@@ -9,6 +9,8 @@ export interface PropertyFilters {
   roomType?: string;
   gender?: string;
   amenity?: string;
+  sharingTypes?: string[];
+  nearLandmark?: string;
   page?: number;
   limit?: number;
 }
@@ -19,21 +21,38 @@ export function usePublicProperties(filters: PropertyFilters = {}) {
     queryFn: async () => {
       let q = supabase
         .from('properties')
-        .select('*, owners:owner_id(name), rooms(id, room_number, room_type, bed_count, rent_per_bed, expected_rent, status, beds(id, bed_number, status, current_rent))')
+        .select('*, owners:owner_id(name), rooms(id, room_number, room_type, bed_count, rent_per_bed, expected_rent, status, floor, furnishing, bathroom_type, amenities, beds(id, bed_number, status, current_rent))')
         .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('rating', { ascending: false, nullsFirst: false });
 
       if (filters.city) q = q.ilike('city', `%${filters.city}%`);
       if (filters.area) q = q.ilike('area', `%${filters.area}%`);
       if (filters.gender && filters.gender !== 'any') q = q.eq('gender_allowed', filters.gender);
 
       const page = filters.page || 0;
-      const limit = filters.limit || 20;
+      const limit = filters.limit || 50;
       q = q.range(page * limit, (page + 1) * limit - 1);
 
       const { data, error } = await q;
       if (error) throw error;
-      return data;
+
+      // Client-side filtering for budget and sharing type
+      let results = data || [];
+      if (filters.budgetMax) {
+        results = results.filter((p: any) => {
+          const rents = (p.rooms || []).map((r: any) => r.rent_per_bed || r.expected_rent).filter(Boolean);
+          if (!rents.length) return true;
+          return Math.min(...rents) <= filters.budgetMax!;
+        });
+      }
+      if (filters.sharingTypes?.length) {
+        const sharingMap: Record<string, number> = { 'Private': 1, '2 Sharing': 2, '3 Sharing': 3, '4 Sharing': 4 };
+        const bedCounts = filters.sharingTypes.map(s => sharingMap[s]).filter(Boolean);
+        results = results.filter((p: any) =>
+          (p.rooms || []).some((r: any) => bedCounts.includes(r.bed_count))
+        );
+      }
+      return results;
     },
   });
 }
@@ -54,6 +73,28 @@ export function usePublicProperty(propertyId: string | undefined) {
   });
 }
 
+export function useSimilarProperties(area?: string | null, city?: string | null, excludeId?: string) {
+  return useQuery({
+    queryKey: ['similar-properties', area, city, excludeId],
+    enabled: !!(area || city),
+    queryFn: async () => {
+      let q = supabase
+        .from('properties')
+        .select('id, name, area, city, photos, rating, price_range, is_verified, rooms(id, rent_per_bed, expected_rent, beds(id, status))')
+        .eq('is_active', true)
+        .limit(6);
+
+      if (area) q = q.ilike('area', `%${area}%`);
+      else if (city) q = q.ilike('city', `%${city}%`);
+      if (excludeId) q = q.neq('id', excludeId);
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 export function useAvailableCities() {
   return useQuery({
     queryKey: ['available-cities'],
@@ -63,8 +104,7 @@ export function useAvailableCities() {
         .select('city')
         .eq('is_active', true);
       if (error) throw error;
-      const cities = [...new Set(data.map(p => p.city).filter(Boolean))];
-      return cities as string[];
+      return [...new Set(data.map(p => p.city).filter(Boolean))] as string[];
     },
   });
 }
@@ -77,8 +117,7 @@ export function useAvailableAreas(city?: string) {
       if (city) q = q.ilike('city', `%${city}%`);
       const { data, error } = await q;
       if (error) throw error;
-      const areas = [...new Set(data.map(p => p.area).filter(Boolean))];
-      return areas as string[];
+      return [...new Set(data.map(p => p.area).filter(Boolean))] as string[];
     },
   });
 }
