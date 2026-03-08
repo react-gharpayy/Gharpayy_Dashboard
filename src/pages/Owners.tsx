@@ -42,7 +42,7 @@ const Owners = () => {
   };
 
   return (
-    <AppLayout>
+    <AppLayout title="Owners" subtitle="Manage property owners and their portfolios">
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>

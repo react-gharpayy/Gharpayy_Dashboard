@@ -53,7 +53,7 @@ const EffortDashboard = () => {
   }, [properties, rooms, visits, leads]);
 
   return (
-    <AppLayout>
+    <AppLayout title="Effort Visibility" subtitle="Transparent effort metrics per property">
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-display font-bold">Effort Visibility</h1>

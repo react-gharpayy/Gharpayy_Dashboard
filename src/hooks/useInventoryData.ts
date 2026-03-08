@@ -134,7 +134,7 @@ export function useCreateSoftLock() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (lock: { room_id: string; lead_id?: string | null; lock_type: string; locked_by?: string | null; expires_at: string; notes?: string | null }) => {
-      const { data, error } = await supabase.from('soft_locks').insert(lock).select().single();
+      const { data, error } = await supabase.from('soft_locks').insert(lock as any).select().single();
       if (error) throw error;
       return data;
     },
