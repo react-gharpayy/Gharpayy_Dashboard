@@ -2,13 +2,18 @@ import { useState } from 'react';
 import { useConversationMessages, useSendMessage, useMessageTemplates } from '@/hooks/useConversationThreads';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Send, Zap } from 'lucide-react';
+import { Send, Zap, Sparkles, Loader2, Copy } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Props {
   leadId: string | null;
   leadName: string;
+  leadBudget?: string;
+  leadLocation?: string;
+  leadStatus?: string;
 }
 
 const ConversationChat = ({ leadId, leadName }: Props) => {

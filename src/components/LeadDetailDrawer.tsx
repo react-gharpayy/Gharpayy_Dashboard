@@ -183,6 +183,52 @@ const LeadDetailDrawer = ({ lead, open, onClose }: Props) => {
               </Select>
             </div>
           </div>
+
+          {/* AI Summary */}
+          <div className="mt-4">
+            {!aiSummary && (
+              <Button variant="outline" size="sm" className="w-full gap-2 text-xs rounded-xl" onClick={handleAiSummary} disabled={aiLoading}>
+                {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                {aiLoading ? 'Analyzing with AI...' : 'AI Lead Analysis'}
+              </Button>
+            )}
+            {aiSummary && (
+              <div className="p-3 rounded-xl bg-accent/5 border border-accent/20 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={12} className="text-accent" />
+                  <span className="text-[10px] font-semibold text-accent">AI ANALYSIS</span>
+                  <Badge variant="outline" className={`text-[9px] ml-auto ${aiSummary.urgency === 'hot' ? 'border-success text-success' : aiSummary.urgency === 'warm' ? 'border-warning text-warning' : 'border-muted-foreground text-muted-foreground'}`}>
+                    {aiSummary.urgency?.toUpperCase()}
+                  </Badge>
+                </div>
+                <p className="text-xs text-foreground">{aiSummary.intent}</p>
+                <p className="text-[10px] text-muted-foreground">{aiSummary.urgency_reason}</p>
+                <div className="border-t border-border pt-2 mt-2">
+                  <p className="text-[10px] font-medium text-foreground">→ {aiSummary.next_action}</p>
+                  <p className="text-[10px] text-destructive mt-0.5">⚠ {aiSummary.risk}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bookings */}
+          {bookings && bookings.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1"><Receipt size={10} /> BOOKINGS</p>
+              {bookings.map((b: any) => (
+                <div key={b.id} className="flex items-center justify-between p-2.5 rounded-xl bg-secondary/50 text-xs">
+                  <div>
+                    <p className="font-medium text-foreground">{b.properties?.name || 'TBD'}</p>
+                    <p className="text-[10px] text-muted-foreground">{b.rooms?.room_number}{b.beds?.bed_number ? ` / ${b.beds.bed_number}` : ''}</p>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant="outline" className="text-[9px]">{b.booking_status}</Badge>
+                    {b.monthly_rent && <p className="text-[10px] text-foreground mt-0.5">₹{Number(b.monthly_rent).toLocaleString()}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
