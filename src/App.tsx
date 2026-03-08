@@ -13,6 +13,9 @@ import Analytics from "./pages/Analytics";
 import Historical from "./pages/Historical";
 import SettingsPage from "./pages/SettingsPage";
 import LeadCapture from "./pages/LeadCapture";
+import Owners from "./pages/Owners";
+import Inventory from "./pages/Inventory";
+import EffortDashboard from "./pages/EffortDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,6 +36,9 @@ const App = () => (
           <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
           <Route path="/historical" element={<ProtectedRoute><Historical /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="/owners" element={<ProtectedRoute><Owners /></ProtectedRoute>} />
+          <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+          <Route path="/effort" element={<ProtectedRoute><EffortDashboard /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
