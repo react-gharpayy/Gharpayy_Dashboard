@@ -20,7 +20,7 @@ export const useConversationThreads = () =>
     queryFn: async () => {
       const { data, error } = await supabase
         .from('conversations')
-        .select('*, leads(id, name, phone)')
+        .select('*, leads(id, name, phone, budget, preferred_location, status)')
         .order('created_at', { ascending: false });
       if (error) throw error;
 
