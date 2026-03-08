@@ -67,7 +67,7 @@ export default function LandingPage() {
               <button onClick={() => navigate('/explore')} className="hover:text-foreground transition-colors">About</button>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>Login</Button>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/auth')}>Login</Button>
               <Button size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => navigate('/explore')}>
                 Find a PG
               </Button>
