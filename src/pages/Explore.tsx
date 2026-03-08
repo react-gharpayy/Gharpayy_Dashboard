@@ -70,8 +70,8 @@ export default function Explore() {
               <button className="hover:text-foreground transition-colors">About</button>
             </div>
 
-            <Button variant="outline" size="sm" onClick={() => navigate('/')}>
-              CRM Dashboard
+            <Button variant="outline" size="sm" onClick={() => navigate('/auth')}>
+              Login
             </Button>
           </div>
         </div>
