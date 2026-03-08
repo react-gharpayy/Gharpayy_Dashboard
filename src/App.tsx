@@ -16,6 +16,8 @@ import LeadCapture from "./pages/LeadCapture";
 import Owners from "./pages/Owners";
 import Inventory from "./pages/Inventory";
 import EffortDashboard from "./pages/EffortDashboard";
+import Availability from "./pages/Availability";
+import Matching from "./pages/Matching";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,6 +41,8 @@ const App = () => (
           <Route path="/owners" element={<ProtectedRoute><Owners /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
           <Route path="/effort" element={<ProtectedRoute><EffortDashboard /></ProtectedRoute>} />
+          <Route path="/availability" element={<ProtectedRoute><Availability /></ProtectedRoute>} />
+          <Route path="/matching" element={<ProtectedRoute><Matching /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

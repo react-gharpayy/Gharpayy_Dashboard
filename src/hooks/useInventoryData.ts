@@ -7,10 +7,7 @@ export function useOwners() {
   return useQuery({
     queryKey: ['owners'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('owners')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('owners').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -77,12 +74,13 @@ export function useCreateRoom() {
       property_id: string; room_number: string; floor?: string | null;
       bed_count?: number; status?: string; actual_rent?: number | null;
       expected_rent?: number | null; room_type?: string | null; notes?: string | null;
+      rent_per_bed?: number | null; bathroom_type?: string | null; furnishing?: string | null;
     }) => {
       const { data, error } = await supabase.from('rooms').insert(room as any).select().single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['rooms'] }); toast.success('Room added'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['rooms'] }); qc.invalidateQueries({ queryKey: ['beds'] }); toast.success('Room added'); },
     onError: (e: any) => toast.error(e.message),
   });
 }
@@ -96,6 +94,46 @@ export function useUpdateRoom() {
       return data;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['rooms'] }); },
+  });
+}
+
+// ─── Beds ────────────────────────────────────────────────────────────
+export function useBeds(roomId?: string) {
+  return useQuery({
+    queryKey: ['beds', roomId],
+    queryFn: async () => {
+      let q = supabase.from('beds').select('*, rooms(room_number, property_id, properties(name, area))').order('bed_number');
+      if (roomId) q = q.eq('room_id', roomId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useAllBeds() {
+  return useQuery({
+    queryKey: ['beds', 'all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('beds')
+        .select('*, rooms(room_number, expected_rent, rent_per_bed, room_type, property_id, properties(id, name, area, city, owner_id))')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useUpdateBed() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: any }) => {
+      const { data, error } = await supabase.from('beds').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['beds'] }); toast.success('Bed updated'); },
   });
 }
 
@@ -133,12 +171,12 @@ export function useSoftLocks(roomId?: string) {
 export function useCreateSoftLock() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (lock: { room_id: string; lead_id?: string | null; lock_type: string; locked_by?: string | null; expires_at: string; notes?: string | null }) => {
+    mutationFn: async (lock: { room_id: string; lead_id?: string | null; lock_type: string; locked_by?: string | null; expires_at: string; notes?: string | null; bed_id?: string | null }) => {
       const { data, error } = await supabase.from('soft_locks').insert(lock as any).select().single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['soft_locks'] }); toast.success('Room locked'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['soft_locks'] }); toast.success('Locked'); },
     onError: (e: any) => toast.error(e.message),
   });
 }
