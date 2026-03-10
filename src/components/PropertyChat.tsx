@@ -2,7 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useCreateLead, useAddConversationMessage } from '@/hooks/usePublicData';
+import { toast } from 'sonner';
 
 interface ChatMessage {
   id: string;
@@ -53,14 +56,34 @@ export default function PropertyChat({ propertyName, isOpen, onClose }: Property
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasJoined, setHasJoined] = useState(false);
+  const [createdLeadId, setCreatedLeadId] = useState<string | null>(null);
+  const [leadForm, setLeadForm] = useState({ name: '', phone: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const createLead = useCreateLead();
+  const addMsg = useAddConversationMessage();
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, hasJoined]);
+
+  const handleJoinChat = async () => {
+    if (!leadForm.name || !leadForm.phone) return;
+    setIsSubmitting(true);
+    try {
+      const resp = await createLead.mutateAsync({ name: leadForm.name, phone: leadForm.phone, source: 'website' });
+      if (resp?.id) setCreatedLeadId(resp.id);
+      setHasJoined(true);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to start chat. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const quickQuestions = ['What about food?', 'Is WiFi included?', 'Security details?', 'Move-in process?'];
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return;
 
     const userMsg: ChatMessage = {
@@ -73,16 +96,25 @@ export default function PropertyChat({ propertyName, isOpen, onClose }: Property
     setInput('');
     setIsTyping(true);
 
+    if (createdLeadId) {
+      addMsg.mutateAsync({ lead_id: createdLeadId, message: userMsg.text, direction: 'inbound', channel: 'website' }).catch(console.error);
+    }
+
     setTimeout(() => {
       const auto = getAutoResponse(text);
+      const botText = auto || "Thanks for your question! I'm connecting you with a Gharpayy housing advisor who can help. They usually respond within 2 minutes. You'll also get a WhatsApp message shortly.";
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: auto ? 'bot' : 'agent',
-        text: auto || "Thanks for your question! I'm connecting you with a Gharpayy housing advisor who can help. They usually respond within 2 minutes. You'll also get a WhatsApp message shortly.",
+        text: botText,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages(prev => [...prev, botMsg]);
       setIsTyping(false);
+
+      if (createdLeadId) {
+        addMsg.mutateAsync({ lead_id: createdLeadId, message: botMsg.text, direction: 'outbound', channel: 'website' }).catch(console.error);
+      }
     }, 800 + Math.random() * 600);
   };
 
@@ -114,69 +146,96 @@ export default function PropertyChat({ propertyName, isOpen, onClose }: Property
             </button>
           </div>
 
-          {/* Messages */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-            {messages.map(msg => (
-              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] ${msg.role === 'user' ? '' : 'flex gap-2'}`}>
-                  {msg.role !== 'user' && (
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${msg.role === 'bot' ? 'bg-accent/10' : 'bg-info/10'}`}>
-                      {msg.role === 'bot' ? <Bot size={12} className="text-accent" /> : <User size={12} className="text-info" />}
-                    </div>
-                  )}
-                  <div>
-                    <div className={`px-3 py-2 rounded-xl text-[13px] leading-relaxed ${
-                      msg.role === 'user'
-                        ? 'bg-accent text-accent-foreground rounded-br-md'
-                        : 'bg-secondary text-foreground rounded-bl-md'
-                    }`}>
-                      {msg.text}
-                    </div>
-                    <p className="text-[9px] text-muted-foreground mt-0.5 px-1">{msg.time}</p>
-                  </div>
+          {/* Body */}
+          {!hasJoined ? (
+            <div className="flex-1 px-4 py-6 overflow-y-auto">
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 rounded-full bg-accent mx-auto flex items-center justify-center mb-3">
+                  <Bot size={24} className="text-accent-foreground" />
                 </div>
+                <h3 className="font-semibold text-lg">Welcome to Gharpayy</h3>
+                <p className="text-sm text-muted-foreground mt-1">Please provide your details to start chatting with us about {propertyName}.</p>
               </div>
-            ))}
-            {isTyping && (
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center">
-                  <Bot size={12} className="text-accent" />
+              <div className="space-y-4">
+                <div>
+                  <Label>Name</Label>
+                  <Input value={leadForm.name} onChange={e => setLeadForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" />
                 </div>
-                <div className="px-3 py-2 rounded-xl bg-secondary">
-                  <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                <div>
+                  <Label>Phone</Label>
+                  <Input value={leadForm.phone} onChange={e => setLeadForm(f => ({ ...f, phone: e.target.value }))} placeholder="Your phone number" />
                 </div>
+                <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isSubmitting || !leadForm.name || !leadForm.phone} onClick={handleJoinChat}>
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Start Chat'}
+                </Button>
               </div>
-            )}
-          </div>
-
-          {/* Quick questions */}
-          {messages.length <= 2 && (
-            <div className="px-4 pb-2 flex gap-1.5 flex-wrap">
-              {quickQuestions.map(q => (
-                <button
-                  key={q}
-                  onClick={() => sendMessage(q)}
-                  className="text-[11px] px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
-                >
-                  {q}
-                </button>
-              ))}
             </div>
-          )}
+          ) : (
+            <>
+              {/* Messages */}
+              <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                {messages.map(msg => (
+                  <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] ${msg.role === 'user' ? '' : 'flex gap-2'}`}>
+                      {msg.role !== 'user' && (
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${msg.role === 'bot' ? 'bg-accent/10' : 'bg-info/10'}`}>
+                          {msg.role === 'bot' ? <Bot size={12} className="text-accent" /> : <User size={12} className="text-info" />}
+                        </div>
+                      )}
+                      <div>
+                        <div className={`px-3 py-2 rounded-xl text-[13px] leading-relaxed ${msg.role === 'user'
+                          ? 'bg-accent text-accent-foreground rounded-br-md'
+                          : 'bg-secondary text-foreground rounded-bl-md'
+                          }`}>
+                          {msg.text}
+                        </div>
+                        <p className="text-[9px] text-muted-foreground mt-0.5 px-1">{msg.time}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {isTyping && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center">
+                      <Bot size={12} className="text-accent" />
+                    </div>
+                    <div className="px-3 py-2 rounded-xl bg-secondary">
+                      <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                    </div>
+                  </div>
+                )}
+              </div>
 
-          {/* Input */}
-          <div className="px-3 py-2.5 border-t border-border flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && sendMessage(input)}
-              placeholder="Ask about this PG..."
-              className="h-9 text-sm"
-            />
-            <Button size="sm" className="h-9 w-9 p-0 bg-accent hover:bg-accent/90" onClick={() => sendMessage(input)}>
-              <Send size={14} className="text-accent-foreground" />
-            </Button>
-          </div>
+              {/* Quick questions */}
+              {messages.length <= 2 && (
+                <div className="px-4 pb-2 flex gap-1.5 flex-wrap">
+                  {quickQuestions.map(q => (
+                    <button
+                      key={q}
+                      onClick={() => sendMessage(q)}
+                      className="text-[11px] px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Input */}
+              <div className="px-3 py-2.5 border-t border-border flex gap-2">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && sendMessage(input)}
+                  placeholder="Ask about this PG..."
+                  className="h-9 text-sm"
+                />
+                <Button size="sm" className="h-9 w-9 p-0 bg-accent hover:bg-accent/90" onClick={() => sendMessage(input)}>
+                  <Send size={14} className="text-accent-foreground" />
+                </Button>
+              </div>
+            </>
+          )}
         </motion.div>
       )}
     </AnimatePresence>

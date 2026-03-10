@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { usePublicProperty, useCreateReservation, useConfirmReservation, useSimilarProperties } from '@/hooks/usePublicData';
+import { usePublicProperty, useCreateReservation, useConfirmReservation, useSimilarProperties, useCreateLead } from '@/hooks/usePublicData';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import PropertyChat from '@/components/PropertyChat';
@@ -33,8 +33,10 @@ export default function PropertyDetail() {
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [selectedBed, setSelectedBed] = useState<any>(null);
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', moveInDate: '' });
+  const [leadForm, setLeadForm] = useState({ name: '', phone: '', date: '', time: '' });
   const [reservationResult, setReservationResult] = useState<any>(null);
   const [heroIdx, setHeroIdx] = useState(0);
+  const createLead = useCreateLead();
 
   const { data: similarProperties } = useSimilarProperties(property?.area, property?.city, propertyId);
 
@@ -92,19 +94,77 @@ export default function PropertyDetail() {
     }
   };
 
+  const loadRazorpay = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleConfirmPayment = async () => {
     if (!reservationResult?.reservation_id) return;
-    try {
-      await confirmReservation.mutateAsync({
-        reservation_id: reservationResult.reservation_id,
-        payment_reference: 'SIM_' + Date.now(),
-      });
-      toast.success('Booking confirmed! Our team will contact you shortly.');
-      setActionMode(null);
-      setReservationResult(null);
-    } catch (e: any) {
-      toast.error(e.message);
+
+    // Attempt to load Razorpay
+    const res = await loadRazorpay();
+    if (!res) {
+      toast.error('Razorpay SDK failed to load. Are you online?');
+      return;
     }
+
+    const options = {
+      key: import.meta.env.VITE_RAZORPAY_KEY || 'rzp_test_dummykey123456', // dummy fallback for local env
+      amount: 1000 * 100, // 1000 INR
+      currency: "INR",
+      name: "Gharpayy",
+      description: `PG Booking - ${property.name}`,
+      handler: async function (response: any) {
+        try {
+          // Confirm reservation on backend with the razorpay payment id
+          await confirmReservation.mutateAsync({
+            reservation_id: reservationResult.reservation_id,
+            payment_reference: response.razorpay_payment_id || 'UPI_' + Date.now(),
+          });
+          toast.success('Payment successful! Booking confirmed.');
+          setActionMode(null);
+          setReservationResult(null);
+        } catch (e: any) {
+          toast.error(e.message || 'Error saving payment');
+        }
+      },
+      prefill: {
+        name: customerForm.name || leadForm.name,
+        contact: customerForm.phone || leadForm.phone,
+        email: customerForm.email,
+      },
+      theme: { color: "#3399cc" }
+    };
+
+    const rzp = new (window as any).Razorpay(options);
+    rzp.on('payment.failed', function (response: any) {
+      toast.error(response.error.description || 'Payment Failed');
+    });
+    rzp.open();
+  };
+
+  const handleScheduleVisit = async () => {
+    if (!leadForm.name || !leadForm.phone) { toast.error("Name and phone are required."); return; }
+    try {
+      await createLead.mutateAsync({ name: leadForm.name, phone: leadForm.phone, source: 'website', property_id: property.id });
+      toast.success("Visit request submitted! We'll confirm shortly.");
+      setActionMode(null);
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleVirtualTour = async () => {
+    if (!leadForm.name || !leadForm.phone) { toast.error("Name and phone are required."); return; }
+    try {
+      await createLead.mutateAsync({ name: leadForm.name, phone: leadForm.phone, source: 'website', property_id: property.id });
+      toast.success("Virtual tour booked! Check WhatsApp for the link.");
+      setActionMode(null);
+    } catch (e: any) { toast.error(e.message); }
   };
 
   const photos = property.photos || [];
@@ -259,11 +319,10 @@ export default function PropertyDetail() {
                               <button
                                 key={bed.id}
                                 onClick={() => { setSelectedRoom(room); setSelectedBed(bed); }}
-                                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                                  selectedBed?.id === bed.id
-                                    ? 'bg-accent text-accent-foreground border-accent'
-                                    : 'bg-secondary text-secondary-foreground border-border hover:border-muted-foreground/30'
-                                }`}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${selectedBed?.id === bed.id
+                                  ? 'bg-accent text-accent-foreground border-accent'
+                                  : 'bg-secondary text-secondary-foreground border-border hover:border-muted-foreground/30'
+                                  }`}
                               >
                                 <Bed size={12} className="inline mr-1" />{bed.bed_number}
                               </button>
@@ -427,7 +486,7 @@ export default function PropertyDetail() {
               </div>
               <DialogFooter>
                 <Button onClick={handleConfirmPayment} disabled={confirmReservation.isPending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-                  {confirmReservation.isPending ? 'Processing...' : 'Simulate Payment ₹1,000'}
+                  {confirmReservation.isPending ? 'Processing...' : 'Pay ₹1,000 via Razorpay/UPI'}
                 </Button>
               </DialogFooter>
             </div>
@@ -440,11 +499,11 @@ export default function PropertyDetail() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Schedule a Visit</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Your Name</Label><Input placeholder="Full name" /></div>
-            <div><Label>Phone</Label><Input placeholder="+91..." /></div>
-            <div><Label>Preferred Date</Label><Input type="date" /></div>
+            <div><Label>Your Name</Label><Input placeholder="Full name" value={leadForm.name} onChange={e => setLeadForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div><Label>Phone</Label><Input placeholder="+91..." value={leadForm.phone} onChange={e => setLeadForm(f => ({ ...f, phone: e.target.value }))} /></div>
+            <div><Label>Preferred Date</Label><Input type="date" value={leadForm.date} onChange={e => setLeadForm(f => ({ ...f, date: e.target.value }))} /></div>
             <div><Label>Preferred Time</Label>
-              <Select>
+              <Select value={leadForm.time} onValueChange={(v) => setLeadForm(f => ({ ...f, time: v }))}>
                 <SelectTrigger><SelectValue placeholder="Select time slot" /></SelectTrigger>
                 <SelectContent>
                   {['10:00 AM', '12:00 PM', '2:00 PM', '4:00 PM', '6:00 PM'].map(t => (
@@ -453,8 +512,8 @@ export default function PropertyDetail() {
                 </SelectContent>
               </Select>
             </div>
-            <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => { toast.success("Visit request submitted! We'll confirm shortly."); setActionMode(null); }}>
-              Request Visit
+            <Button disabled={createLead.isPending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" onClick={handleScheduleVisit}>
+              {createLead.isPending ? 'Submitting...' : 'Request Visit'}
             </Button>
           </div>
         </DialogContent>
@@ -466,10 +525,10 @@ export default function PropertyDetail() {
           <DialogHeader><DialogTitle>Book a Virtual Tour</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">See the property from the comfort of your home. A Gharpayy agent will give you a live video walkthrough.</p>
-            <div><Label>Your Name</Label><Input placeholder="Full name" /></div>
-            <div><Label>Phone / WhatsApp</Label><Input placeholder="+91..." /></div>
+            <div><Label>Your Name</Label><Input placeholder="Full name" value={leadForm.name} onChange={e => setLeadForm(f => ({ ...f, name: e.target.value }))} /></div>
+            <div><Label>Phone / WhatsApp</Label><Input placeholder="+91..." value={leadForm.phone} onChange={e => setLeadForm(f => ({ ...f, phone: e.target.value }))} /></div>
             <div><Label>Preferred Slot</Label>
-              <Select>
+              <Select value={leadForm.time} onValueChange={(v) => setLeadForm(f => ({ ...f, time: v }))}>
                 <SelectTrigger><SelectValue placeholder="Select time" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="today_now">Today - As soon as possible</SelectItem>
@@ -479,8 +538,8 @@ export default function PropertyDetail() {
                 </SelectContent>
               </Select>
             </div>
-            <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => { toast.success('Virtual tour booked! Check WhatsApp for the link.'); setActionMode(null); }}>
-              Book Virtual Tour
+            <Button disabled={createLead.isPending} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" onClick={handleVirtualTour}>
+              {createLead.isPending ? 'Booking...' : 'Book Virtual Tour'}
             </Button>
           </div>
         </DialogContent>
