@@ -4,9 +4,11 @@
 Gharpayy Dashboard is a comprehensive administration and management system built for Gharpayy. It provides a centralized web-based application to handle various operational aspects, including leads, inventory, properties, bookings, and user analytics.
 
 ## Features
+- **Interactive Map Discovery**: Map-based property discovery using Leaflet for visual exploration of available PG locations.
+- **Live Property Chat**: Integrated live chat widget on property pages with automated FAQ responses, Supabase message persistence, and seamless agent escalation.
 - **Authentication & Authorization**: Secure login, signup, and password reset functionalities.
 - **Analytics & Reporting**: Data-driven insights and historical logs for business performance metrics.
-- **CRM Pipeline**: Track and capture leads, manage conversations, and handle visits.
+- **CRM Pipeline & Lead Capture**: Track and capture leads from website chat instantly, manage conversations, and handle visits.
 - **Inventory & Property Management**: Detailed property tracking, matching, and zone management.
 - **Owner Portals**: Dedicated interfaces for tracking availability, handling owners, and managing bookings.
 
@@ -16,6 +18,7 @@ Gharpayy Dashboard is a comprehensive administration and management system built
 - **State Management**: TanStack React Query
 - **Backend & Database**: Supabase
 - **Routing**: React Router
+- **Map & Discovery**: Leaflet, React Leaflet
 
 ## Local Setup Instructions
 
