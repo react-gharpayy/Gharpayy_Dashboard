@@ -173,3 +173,41 @@ export function useConfirmReservation() {
     },
   });
 }
+
+export function useCreateLead() {
+  return useMutation({
+    mutationFn: async (leadData: { name: string; phone: string; email?: string; source: 'whatsapp' | 'website' | 'instagram' | 'facebook' | 'phone' | 'landing_page'; property_id?: string; comments?: string }) => {
+      const { data, error } = await supabase
+        .from('leads')
+        .insert([{
+          name: leadData.name,
+          phone: leadData.phone,
+          email: leadData.email,
+          source: leadData.source,
+          property_id: leadData.property_id,
+          status: 'new',
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useAddConversationMessage() {
+  return useMutation({
+    mutationFn: async (msgData: { lead_id: string; message: string; direction: 'inbound' | 'outbound'; channel: string }) => {
+      const { data, error } = await supabase
+        .from('conversations')
+        .insert([{
+          lead_id: msgData.lead_id,
+          message: msgData.message,
+          direction: msgData.direction,
+          channel: msgData.channel,
+        }]);
+      if (error) throw error;
+      return data;
+    },
+  });
+}
