@@ -27,6 +27,7 @@ import LandingPage from "./pages/LandingPage";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import OwnerPortal from "./pages/OwnerPortal";
+import OwnerSignup from "./pages/OwnerSignup";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,9 +47,7 @@ const App = () => (
             <Route path="/capture" element={<LeadCapture />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-
-            {/* Owner-facing portal */}
-            {/* <Route path="/owner-portal" element={<OwnerPortal />} /> */}
+            <Route path="/owner-signup" element={<OwnerSignup />} />
 
             <Route
               path="/owner-portal"

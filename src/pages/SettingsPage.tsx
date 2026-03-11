@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import PropertyImageUpload from "@/components/PropertyImageUpload";
 
 type AppRole = "admin" | "manager" | "agent" | "owner";
 
@@ -545,23 +546,33 @@ function PropertiesTab({ properties, qc }: { properties: any[]; qc: any }) {
           {properties.map((p) => (
             <div
               key={p.id}
-              className="flex items-center justify-between p-3 rounded-xl bg-secondary/50"
+              className="p-3 rounded-xl bg-secondary/50 space-y-3"
             >
-              <div>
-                <p className="text-xs font-medium text-foreground">{p.name}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  {[p.area, p.city].filter(Boolean).join(", ")}
-                  {p.price_range ? ` · ${p.price_range}` : ""}
-                </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-foreground">
+                    {p.name}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {[p.area, p.city].filter(Boolean).join(", ")}
+                    {p.price_range ? ` · ${p.price_range}` : ""}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                  onClick={() => handleDelete(p.id)}
+                >
+                  <Trash2 size={12} />
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                onClick={() => handleDelete(p.id)}
-              >
-                <Trash2 size={12} />
-              </Button>
+
+              {/* Photo upload per property */}
+              <PropertyImageUpload
+                propertyId={p.id}
+                existingPhotos={p.photos ?? []}
+              />
             </div>
           ))}
           {properties.length === 0 && (

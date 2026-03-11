@@ -1,17 +1,18 @@
-import { Component, type ReactNode, type ErrorInfo } from 'react';
-import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { Component, type ReactNode, type ErrorInfo } from "react";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { captureError } from "@/lib/sentry";
 
 interface Props {
-  children:   ReactNode;
-  fallback?:  ReactNode;
-  context?:   string;          // e.g. "Pipeline", "Conversations"
+  children: ReactNode;
+  fallback?: ReactNode;
+  context?: string; // e.g. "Pipeline", "Conversations"
 }
 
 interface State {
-  hasError:   boolean;
-  error:      Error | null;
-  errorInfo:  ErrorInfo | null;
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: ErrorInfo | null;
 }
 
 class ErrorBoundary extends Component<Props, State> {
@@ -27,22 +28,11 @@ class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ errorInfo });
 
-    // ── Sentry integration placeholder ─────────────────────
-    // When you add Sentry, replace this block:
-    //
-    // import * as Sentry from '@sentry/react';
-    // Sentry.captureException(error, {
-    //   extra: {
-    //     componentStack: errorInfo.componentStack,
-    //     context: this.props.context,
-    //   },
-    // });
-    //
-    console.error(
-      `[ErrorBoundary${this.props.context ? ` — ${this.props.context}` : ''}]`,
-      error,
-      errorInfo.componentStack,
-    );
+    // Sends to Sentry in production, console.error in dev
+    captureError(error, {
+      componentStack: errorInfo.componentStack,
+      context: this.props.context,
+    });
   }
 
   handleReset = () => {
@@ -61,7 +51,7 @@ class ErrorBoundary extends Component<Props, State> {
           <span className="font-display font-semibold text-sm">
             {this.props.context
               ? `${this.props.context} failed to load`
-              : 'Something went wrong'}
+              : "Something went wrong"}
           </span>
         </div>
 
