@@ -27,6 +27,7 @@ import LandingPage from "./pages/LandingPage";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import OwnerPortal from "./pages/OwnerPortal";
+import OwnerSignup from "./pages/OwnerSignup";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,26 +47,137 @@ const App = () => (
             <Route path="/capture" element={<LeadCapture />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/owner-signup" element={<OwnerSignup />} />
 
-            {/* Owner-facing portal */}
-            <Route path="/owner-portal" element={<OwnerPortal />} />
-
+            <Route
+              path="/owner-portal"
+              element={
+                <ProtectedRoute requiredRoles={["admin", "owner"]}>
+                  <OwnerPortal />
+                </ProtectedRoute>
+              }
+            />
             {/* Internal CRM routes */}
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
-            <Route path="/pipeline" element={<ProtectedRoute><Pipeline /></ProtectedRoute>} />
-            <Route path="/visits" element={<ProtectedRoute><Visits /></ProtectedRoute>} />
-            <Route path="/conversations" element={<ProtectedRoute><Conversations /></ProtectedRoute>} />
-            <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-            <Route path="/historical" element={<ProtectedRoute><Historical /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-            <Route path="/owners" element={<ProtectedRoute><Owners /></ProtectedRoute>} />
-            <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-            <Route path="/effort" element={<ProtectedRoute><EffortDashboard /></ProtectedRoute>} />
-            <Route path="/availability" element={<ProtectedRoute><Availability /></ProtectedRoute>} />
-            <Route path="/matching" element={<ProtectedRoute><Matching /></ProtectedRoute>} />
-            <Route path="/bookings" element={<ProtectedRoute><Bookings /></ProtectedRoute>} />
-            <Route path="/zones" element={<ProtectedRoute><ZoneManagement /></ProtectedRoute>} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/leads"
+              element={
+                <ProtectedRoute>
+                  <Leads />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pipeline"
+              element={
+                <ProtectedRoute>
+                  <Pipeline />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/visits"
+              element={
+                <ProtectedRoute>
+                  <Visits />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/conversations"
+              element={
+                <ProtectedRoute>
+                  <Conversations />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedRoute>
+                  <Analytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/historical"
+              element={
+                <ProtectedRoute>
+                  <Historical />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/owners"
+              element={
+                <ProtectedRoute>
+                  <Owners />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/inventory"
+              element={
+                <ProtectedRoute>
+                  <Inventory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/effort"
+              element={
+                <ProtectedRoute>
+                  <EffortDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/availability"
+              element={
+                <ProtectedRoute>
+                  <Availability />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/matching"
+              element={
+                <ProtectedRoute>
+                  <Matching />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/bookings"
+              element={
+                <ProtectedRoute>
+                  <Bookings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/zones"
+              element={
+                <ProtectedRoute>
+                  <ZoneManagement />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

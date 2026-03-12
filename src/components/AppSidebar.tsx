@@ -1,111 +1,316 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Users, Kanban, CalendarCheck, BarChart3, Settings,
-  MessageSquare, History, X, Moon, Sun, Building2, Bed, TrendingUp,
-  Map, Sparkles, Receipt, Globe, UserCircle,
-} from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+  LayoutDashboard,
+  Users,
+  Kanban,
+  CalendarCheck,
+  BarChart3,
+  Settings,
+  MessageSquare,
+  History,
+  X,
+  Moon,
+  Sun,
+  Building2,
+  Bed,
+  TrendingUp,
+  Map,
+  Sparkles,
+  Receipt,
+  Globe,
+  UserCircle,
+  LogOut,
+} from "lucide-react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 
+// ── Nav definitions ───────────────────────────────────────────
 const salesItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/leads', icon: Users, label: 'Leads' },
-  { to: '/pipeline', icon: Kanban, label: 'Pipeline' },
-  { to: '/visits', icon: CalendarCheck, label: 'Visits' },
-  { to: '/conversations', icon: MessageSquare, label: 'Messages' },
-  { to: '/bookings', icon: Receipt, label: 'Bookings' },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/historical', icon: History, label: 'Historical' },
+  {
+    to: "/dashboard",
+    icon: LayoutDashboard,
+    label: "Dashboard",
+    roles: ["admin", "manager", "agent"],
+  },
+  {
+    to: "/leads",
+    icon: Users,
+    label: "Leads",
+    roles: ["admin", "manager", "agent"],
+  },
+  {
+    to: "/pipeline",
+    icon: Kanban,
+    label: "Pipeline",
+    roles: ["admin", "manager", "agent"],
+  },
+  {
+    to: "/visits",
+    icon: CalendarCheck,
+    label: "Visits",
+    roles: ["admin", "manager", "agent"],
+  },
+  {
+    to: "/conversations",
+    icon: MessageSquare,
+    label: "Messages",
+    roles: ["admin", "manager", "agent"],
+  },
+  {
+    to: "/bookings",
+    icon: Receipt,
+    label: "Bookings",
+    roles: ["admin", "manager", "agent"],
+  },
+  {
+    to: "/analytics",
+    icon: BarChart3,
+    label: "Analytics",
+    roles: ["admin", "manager"],
+  },
+  {
+    to: "/historical",
+    icon: History,
+    label: "Historical",
+    roles: ["admin", "manager"],
+  },
 ];
 
 const supplyItems = [
-  { to: '/owners', icon: Building2, label: 'Owners' },
-  { to: '/inventory', icon: Bed, label: 'Inventory' },
-  { to: '/availability', icon: Map, label: 'Availability' },
-  { to: '/effort', icon: TrendingUp, label: 'Effort' },
-  { to: '/matching', icon: Sparkles, label: 'Matching' },
-  { to: '/zones', icon: Globe, label: 'Zones' },
+  {
+    to: "/owners",
+    icon: Building2,
+    label: "Owners",
+    roles: ["admin", "manager"],
+  },
+  {
+    to: "/inventory",
+    icon: Bed,
+    label: "Inventory",
+    roles: ["admin", "manager", "agent"],
+  },
+  {
+    to: "/availability",
+    icon: Map,
+    label: "Availability",
+    roles: ["admin", "manager", "agent"],
+  },
+  {
+    to: "/effort",
+    icon: TrendingUp,
+    label: "Effort",
+    roles: ["admin", "manager"],
+  },
+  {
+    to: "/matching",
+    icon: Sparkles,
+    label: "Matching",
+    roles: ["admin", "manager", "agent"],
+  },
+  { to: "/zones", icon: Globe, label: "Zones", roles: ["admin"] },
 ];
 
 const portalItems = [
-  { to: '/owner-portal', icon: UserCircle, label: 'Owner Portal' },
+  {
+    to: "/owner-portal",
+    icon: UserCircle,
+    label: "Owner Portal",
+    roles: ["admin", "owner"],
+  },
 ];
 
-const AppSidebar = ({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) => {
-  const location = useLocation();
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
-  useEffect(() => { document.documentElement.classList.toggle('dark', dark); }, [dark]);
+type NavItem = { to: string; icon: any; label: string; roles: string[] };
 
-  const renderGroup = (label: string, items: typeof salesItems) => (
-    <>
-      <p className="px-2.5 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'hsl(var(--sidebar-fg))' }}>{label}</p>
-      {items.map((item) => {
-        const isActive = location.pathname === item.to;
-        return (
-          <NavLink key={item.to} to={item.to} onClick={onClose} className={`sidebar-link ${isActive ? 'active' : ''}`}>
-            <item.icon size={15} strokeWidth={isActive ? 2 : 1.6} />
-            <span>{item.label}</span>
-          </NavLink>
-        );
-      })}
-    </>
+const AppSidebar = ({
+  isOpen,
+  onClose,
+}: {
+  isOpen?: boolean;
+  onClose?: () => void;
+}) => {
+  const location = useLocation();
+  const { user, role, signOut } = useAuth();
+  const [dark, setDark] = useState(() =>
+    document.documentElement.classList.contains("dark"),
   );
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
+
+  // Filter items user can see
+  const visible = (items: NavItem[]) =>
+    items.filter((item) => role && item.roles.includes(role));
+
+  const renderGroup = (label: string, items: NavItem[]) => {
+    const allowed = visible(items);
+    if (!allowed.length) return null;
+    return (
+      <>
+        <p
+          className="px-2.5 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: "hsl(var(--sidebar-fg))" }}
+        >
+          {label}
+        </p>
+        {allowed.map((item) => {
+          const isActive = location.pathname === item.to;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              onClick={onClose}
+              className={`sidebar-link ${isActive ? "active" : ""}`}
+            >
+              <item.icon size={15} strokeWidth={isActive ? 2 : 1.6} />
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
+      </>
+    );
+  };
+
+  // Display name + initials from email
+  const email = user?.email ?? "";
+  const initials = email.slice(0, 1).toUpperCase();
+  const roleLabel =
+    role === "admin"
+      ? "Administrator"
+      : role === "manager"
+        ? "Manager"
+        : role === "agent"
+          ? "Agent"
+          : role === "owner"
+            ? "Owner"
+            : "User";
 
   return (
     <>
       <AnimatePresence>
         {isOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-40 bg-foreground/20 glass lg:hidden" onClick={onClose} />
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-40 bg-foreground/20 glass lg:hidden"
+            onClick={onClose}
+          />
         )}
       </AnimatePresence>
 
       <aside
-        className={`fixed left-0 top-0 z-50 h-screen w-[232px] flex flex-col border-r transition-transform duration-200 ease-out lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
-        style={{ background: 'hsl(var(--sidebar-bg))', borderColor: 'hsl(var(--sidebar-border))' }}
+        className={`fixed left-0 top-0 z-50 h-screen w-[232px] flex flex-col border-r transition-transform duration-200 ease-out lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
+        style={{
+          background: "hsl(var(--sidebar-bg))",
+          borderColor: "hsl(var(--sidebar-border))",
+        }}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between px-4 h-14 border-b" style={{ borderColor: 'hsl(var(--sidebar-border))' }}>
+        <div
+          className="flex items-center justify-between px-4 h-14 border-b"
+          style={{ borderColor: "hsl(var(--sidebar-border))" }}
+        >
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center">
-              <span className="text-accent-foreground font-semibold text-xs">G</span>
+              <span className="text-accent-foreground font-semibold text-xs">
+                G
+              </span>
             </div>
             <div>
-              <h1 className="font-semibold text-[13px] tracking-tight" style={{ color: 'hsl(var(--sidebar-active-fg))' }}>Gharpayy</h1>
-              <p className="text-[9px] -mt-0.5" style={{ color: 'hsl(var(--sidebar-fg))' }}>Booking OS</p>
+              <h1
+                className="font-semibold text-[13px] tracking-tight"
+                style={{ color: "hsl(var(--sidebar-active-fg))" }}
+              >
+                Gharpayy
+              </h1>
+              <p
+                className="text-[9px] -mt-0.5"
+                style={{ color: "hsl(var(--sidebar-fg))" }}
+              >
+                Booking OS
+              </p>
             </div>
           </div>
-          <button className="lg:hidden p-1 rounded-md hover:bg-white/10 transition-colors" onClick={onClose}>
-            <X size={16} style={{ color: 'hsl(var(--sidebar-fg))' }} />
+          <button
+            className="lg:hidden p-1 rounded-md hover:bg-white/10 transition-colors"
+            onClick={onClose}
+          >
+            <X size={16} style={{ color: "hsl(var(--sidebar-fg))" }} />
           </button>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 px-2 overflow-y-auto space-y-0.5">
-          {renderGroup('Demand', salesItems)}
-          {renderGroup('Supply', supplyItems)}
-          {renderGroup('Portals', portalItems)}
+          {renderGroup("Demand", salesItems)}
+          {renderGroup("Supply", supplyItems)}
+          {renderGroup("Portals", portalItems)}
         </nav>
 
         {/* Footer */}
-        <div className="px-2 py-3 border-t space-y-0.5" style={{ borderColor: 'hsl(var(--sidebar-border))' }}>
-          <button onClick={() => setDark(!dark)} className="sidebar-link w-full">
-            {dark ? <Sun size={15} strokeWidth={1.6} /> : <Moon size={15} strokeWidth={1.6} />}
-            <span>{dark ? 'Light' : 'Dark'}</span>
+        <div
+          className="px-2 py-3 border-t space-y-0.5"
+          style={{ borderColor: "hsl(var(--sidebar-border))" }}
+        >
+          <button
+            onClick={() => setDark(!dark)}
+            className="sidebar-link w-full"
+          >
+            {dark ? (
+              <Sun size={15} strokeWidth={1.6} />
+            ) : (
+              <Moon size={15} strokeWidth={1.6} />
+            )}
+            <span>{dark ? "Light" : "Dark"}</span>
           </button>
-          <NavLink to="/settings" onClick={onClose} className={`sidebar-link ${location.pathname === '/settings' ? 'active' : ''}`}>
-            <Settings size={15} strokeWidth={1.6} />
-            <span>Settings</span>
-          </NavLink>
 
-          <div className="mt-2 mx-0.5 p-2.5 rounded-lg" style={{ background: 'hsl(var(--sidebar-hover))' }}>
+          {role === "admin" && (
+            <NavLink
+              to="/settings"
+              onClick={onClose}
+              className={`sidebar-link ${location.pathname === "/settings" ? "active" : ""}`}
+            >
+              <Settings size={15} strokeWidth={1.6} />
+              <span>Settings</span>
+            </NavLink>
+          )}
+
+          {/* Sign out */}
+          <button
+            onClick={signOut}
+            className="sidebar-link w-full text-left"
+            style={{ color: "hsl(var(--sidebar-fg))" }}
+          >
+            <LogOut size={15} strokeWidth={1.6} />
+            <span>Sign Out</span>
+          </button>
+
+          {/* User card */}
+          <div
+            className="mt-2 mx-0.5 p-2.5 rounded-lg"
+            style={{ background: "hsl(var(--sidebar-hover))" }}
+          >
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center">
-                <span className="text-[9px] font-bold text-accent">A</span>
+              <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
+                <span className="text-[9px] font-bold text-accent">
+                  {initials}
+                </span>
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-medium truncate" style={{ color: 'hsl(var(--sidebar-active-fg))' }}>Admin</p>
-                <p className="text-[9px] truncate" style={{ color: 'hsl(var(--sidebar-fg))' }}>admin@gharpayy.com</p>
+                <p
+                  className="text-[11px] font-medium truncate"
+                  style={{ color: "hsl(var(--sidebar-active-fg))" }}
+                >
+                  {roleLabel}
+                </p>
+                <p
+                  className="text-[9px] truncate"
+                  style={{ color: "hsl(var(--sidebar-fg))" }}
+                >
+                  {email}
+                </p>
               </div>
             </div>
           </div>
