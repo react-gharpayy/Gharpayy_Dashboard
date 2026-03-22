@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import Lead from '@/models/Lead';
 import User from '@/models/User';
+import LeadActivity from '@/models/LeadActivity';
 import { getAuthUserFromCookie } from '@/lib/auth';
 
 export async function POST(req: Request) {
@@ -26,6 +27,22 @@ export async function POST(req: Request) {
     }));
 
     const result = await Lead.insertMany(transformedLeads);
+
+    try {
+      const activityLogs = result.map((insertedLead) => ({
+        leadId: insertedLead._id.toString(),
+        leadName: insertedLead.name,
+        userId: authUser.id,
+        userName: authUser.fullName,
+        userRole: authUser.role,
+        actionType: 'added',
+        details: { source: insertedLead.source, status: insertedLead.status }
+      }));
+      if (activityLogs.length > 0) {
+        await LeadActivity.insertMany(activityLogs);
+      }
+    } catch (e) { console.error('Failed to log bulk lead creation', e); }
+
     return NextResponse.json({ count: result.length });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -67,10 +84,61 @@ export async function PATCH(req: Request) {
       }
     }
 
+    const leadsToUpdate = await Lead.find({ _id: { $in: ids } });
+
     const result = await Lead.updateMany(
       { _id: { $in: ids } },
       { $set: mappedUpdates }
     );
+
+    try {
+      const activityLogs: any[] = [];
+      const now = new Date();
+      
+      const memberIdsToLookup = new Set<string>();
+      if (mappedUpdates.assignedMemberId) memberIdsToLookup.add(mappedUpdates.assignedMemberId.toString());
+      for (const oldLead of leadsToUpdate) {
+        if (oldLead.assignedMemberId) memberIdsToLookup.add(oldLead.assignedMemberId.toString());
+      }
+      
+      const memberDocs = await User.find({ _id: { $in: Array.from(memberIdsToLookup) } }).select('fullName');
+      const memberNameMap: Record<string, string> = {};
+      memberDocs.forEach((m: any) => { memberNameMap[m._id.toString()] = m.fullName; });
+
+      for (const oldLead of leadsToUpdate) {
+        if (mappedUpdates.status !== undefined && oldLead.status !== mappedUpdates.status) {
+          activityLogs.push({
+            leadId: oldLead._id.toString(),
+            leadName: oldLead.name,
+            userId: authUser.id,
+            userName: authUser.fullName,
+            userRole: authUser.role,
+            actionType: 'status_changed',
+            details: { from: oldLead.status, to: mappedUpdates.status },
+            createdAt: now
+          });
+        }
+        if (mappedUpdates.assignedMemberId !== undefined && String(oldLead.assignedMemberId || '') !== String(mappedUpdates.assignedMemberId || '')) {
+          const fromName = oldLead.assignedMemberId ? (memberNameMap[oldLead.assignedMemberId.toString()] || 'unassigned') : 'unassigned';
+          const toName = mappedUpdates.assignedMemberId ? (memberNameMap[mappedUpdates.assignedMemberId.toString()] || 'unassigned') : 'unassigned';
+
+          activityLogs.push({
+            leadId: oldLead._id.toString(),
+            leadName: oldLead.name,
+            userId: authUser.id,
+            userName: authUser.fullName,
+            userRole: authUser.role,
+            actionType: 'assigned',
+            details: { from: fromName, to: toName },
+            createdAt: now
+          });
+        }
+      }
+      if (activityLogs.length > 0) {
+        await LeadActivity.insertMany(activityLogs);
+      }
+    } catch (e) { console.error('Failed to log bulk modification', e); }
+
     return NextResponse.json({ count: result.modifiedCount });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -99,7 +167,39 @@ export async function DELETE(req: Request) {
     if (!ids || ids.length === 0) return NextResponse.json({ error: 'IDs required' }, { status: 400 });
 
     await connectToDatabase();
+    
+    // Fetch leads before deletion to preserve names in logs
+    const leadsToDelete = await Lead.find({ _id: { $in: ids } }, '_id name');
+    
     const result = await Lead.deleteMany({ _id: { $in: ids } });
+
+    try {
+      if (leadsToDelete.length > 0) {
+        const activityLogs = leadsToDelete.map((doc: any) => ({
+          leadId: doc._id.toString(),
+          leadName: doc.name,
+          userId: authUser.id,
+          userName: authUser.fullName,
+          userRole: authUser.role,
+          actionType: 'deleted',
+          createdAt: new Date()
+        }));
+        await LeadActivity.insertMany(activityLogs);
+      } else {
+        // Fallback: If Lead was already gone, try to create a name-less log at least, 
+        // or skip if we only want named logs. For now, we try to at least log the IDs.
+        const activityLogs = ids.map((id: string) => ({
+          leadId: id,
+          userId: authUser.id,
+          userName: authUser.fullName,
+          userRole: authUser.role,
+          actionType: 'deleted',
+          createdAt: new Date()
+        }));
+        await LeadActivity.insertMany(activityLogs);
+      }
+    } catch (e) { console.error('Failed to log bulk deletion', e); }
+
     return NextResponse.json({ count: result.deletedCount });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

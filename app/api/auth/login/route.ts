@@ -3,6 +3,7 @@ import { issueAuthCookie, normalizeUsername, ensureDefaultCEO } from '@/lib/auth
 import connectToDatabase from '@/lib/mongodb';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
+import LoginActivity from '@/models/LoginActivity';
 
 export async function POST(req: Request) {
   try {
@@ -39,6 +40,17 @@ export async function POST(req: Request) {
       role: user.role as any,
       zones: user.zones,
     });
+
+    try {
+      await LoginActivity.create({
+        userId: user._id,
+        name: user.fullName,
+        role: user.role,
+        actionType: 'login'
+      });
+    } catch (e) {
+      console.error('Failed to log login activity', e);
+    }
 
     return NextResponse.json({
       message: 'Logged in successfully',

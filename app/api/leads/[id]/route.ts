@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import Lead from '@/models/Lead';
 import User from '@/models/User';
+import LeadActivity from '@/models/LeadActivity';
 import { getAuthUserFromCookie } from '@/lib/auth';
 
 async function validateAgentAssignment(authUser: any, agentId?: string | null) {
@@ -74,6 +75,41 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       .populate('propertyId', '_id name');
 
     if (!updated) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+
+    try {
+      if (lead.status !== updated.status) {
+        await LeadActivity.create({
+          leadId: updated._id.toString(),
+          leadName: updated.name,
+          userId: authUser.id,
+          userName: authUser.fullName,
+          userRole: authUser.role,
+          actionType: 'status_changed',
+          details: { from: lead.status, to: updated.status }
+        });
+      }
+      if (String(lead.assignedMemberId || '') !== String(updated.assignedMemberId || '')) {
+        const oldAssignedAgent = lead.assignedMemberId
+          ? await User.findOne({ _id: lead.assignedMemberId }).select('fullName')
+          : null;
+        const newAssignedAgent = updated.assignedMemberId
+          ? await User.findOne({ _id: updated.assignedMemberId }).select('fullName')
+          : null;
+
+        await LeadActivity.create({
+          leadId: updated._id.toString(),
+          leadName: updated.name,
+          userId: authUser.id,
+          userName: authUser.fullName,
+          userRole: authUser.role,
+          actionType: 'assigned',
+          details: { 
+            from: oldAssignedAgent?.fullName || 'unassigned', 
+            to: newAssignedAgent?.fullName || 'unassigned' 
+          }
+        });
+      }
+    } catch (e) { console.error('Failed to log lead modification', e); }
 
     const assignedAgent = updated.assignedMemberId
       ? await User.findOne({ _id: updated.assignedMemberId, role: 'member' }).select('_id fullName')

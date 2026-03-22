@@ -10,6 +10,7 @@ import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
 import { Filter, Download, Trash2, PhoneCall, MessageCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
@@ -52,6 +53,7 @@ const statusBadgeConfig: Record<string, { bg: string; color: string; border: str
 };
 
 const Leads = () => {
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterSource, setFilterSource] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterDuplicate, setFilterDuplicate] = useState<string>('all');
@@ -75,6 +77,17 @@ const Leads = () => {
 
   const filtered = (leads || [])
     .filter(l => {
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const shortId = `l-${l.id.slice(-6).toLowerCase()}`;
+        if (
+          !l.name.toLowerCase().includes(q) &&
+          (!l.phone || !l.phone.includes(q)) &&
+          !shortId.includes(q)
+        ) {
+          return false;
+        }
+      }
       if (filterSource !== 'all' && l.source !== filterSource) return false;
       if (filterStatus !== 'all' && l.status !== filterStatus) return false;
       if (filterDuplicate === 'duplicate' && !l.isDuplicate) return false;
@@ -168,6 +181,12 @@ const Leads = () => {
 
           {/* Desktop Filters */}
           <div className="hidden md:flex items-center gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <Input 
+              placeholder="Search Name, Phone, ID..." 
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="h-8 text-2xs rounded-xl w-48 bg-card border-border"
+            />
             <Filter size={13} className="text-muted-foreground shrink-0" />
             <select value={filterSource} onChange={e => setFilterSource(e.target.value)} className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30">
               <option value="all">All Sources</option>
@@ -201,6 +220,12 @@ const Leads = () => {
         {/* Mobile Filters Expanded */}
         {showFiltersMobile && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="flex md:hidden flex-col gap-2 p-3 bg-secondary/30 rounded-xl border border-border">
+            <Input 
+              placeholder="Search Name, Phone, ID..." 
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="h-8 text-xs rounded-lg w-full bg-card border-border"
+            />
             <select value={filterSource} onChange={e => setFilterSource(e.target.value)} className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none">
               <option value="all">All Sources</option>
               {Object.entries(SOURCE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -318,6 +343,7 @@ const Leads = () => {
                   {/* Row 1: Name + phone + key badges */}
                   <div className="lead-row" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span className="lead-name" style={{ fontSize: 14, fontWeight: 700, color: T.hi, fontFamily: T.sans }}>{lead.name}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: T.dim, fontFamily: T.mono, opacity: 0.8 }}>L-{lead.id.slice(-6).toUpperCase()}</span>
                     {lead.phone && <span className="lead-phone" style={{ fontFamily: T.mono, fontSize: 11, color: T.acc, fontWeight: 500 }}>{lead.phone}</span>}
                     {lead.isDuplicate && <span className="lead-badge" style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(251,146,60,0.1)', color: '#ea580c', border: '1px solid rgba(251,146,60,0.3)', fontWeight: 600 }}>Duplicate</span>}
 

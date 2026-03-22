@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import Lead from '@/models/Lead';
 import User from '@/models/User';
+import LeadActivity from '@/models/LeadActivity';
 import { getAuthUserFromCookie } from '@/lib/auth';
 
 function normalizePhone(phone?: string | null) {
@@ -123,6 +124,19 @@ export async function POST(req: Request) {
     };
 
     const lead = await Lead.create(leadData);
+
+    try {
+      await LeadActivity.create({
+        leadId: lead._id.toString(),
+        leadName: lead.name,
+        userId: authUser.id,
+        userName: authUser.fullName,
+        userRole: authUser.role,
+        actionType: 'added',
+        details: { source: lead.source, status: lead.status }
+      });
+    } catch (e) { console.error('Failed to log lead creation', e); }
+
     return NextResponse.json(lead, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

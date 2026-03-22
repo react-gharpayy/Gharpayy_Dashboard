@@ -11,7 +11,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SuperAdminSettingsPanel } from '@/components/SuperAdminSettingsPanel';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { KeyRound, Plus, Trash2, UserCog, Building2, User, Save } from 'lucide-react';
+import { KeyRound, Plus, Trash2, UserCog, Building2, User, Save, Activity } from 'lucide-react';
+import { LoginActivityTab, LeadActivityTab } from '@/components/ActivityTabs';
 
 const SettingsPage = () => {
   const { user } = useAuth();
@@ -45,14 +46,16 @@ const SettingsPage = () => {
         transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
       >
         <Tabs defaultValue={isManager ? 'admins' : 'team'} className="space-y-6">
-          <TabsList className="grid grid-cols-3 w-full max-w-sm">
+          <TabsList className="flex flex-wrap h-auto gap-2 w-full max-w-full bg-transparent p-0">
             {isManager ? (
-              <TabsTrigger value="admins" className="text-xs gap-1.5"><UserCog size={13} /> Admins</TabsTrigger>
+              <TabsTrigger value="admins" className="text-xs gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary border bg-background"><UserCog size={13} /> Admins</TabsTrigger>
             ) : (
-              <TabsTrigger value="team" className="text-xs gap-1.5"><UserCog size={13} /> Team</TabsTrigger>
+              <TabsTrigger value="team" className="text-xs gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary border bg-background"><UserCog size={13} /> Team</TabsTrigger>
             )}
-            <TabsTrigger value="properties" className="text-xs gap-1.5"><Building2 size={13} /> Properties</TabsTrigger>
-            <TabsTrigger value="profile" className="text-xs gap-1.5"><User size={13} /> Profile</TabsTrigger>
+            <TabsTrigger value="properties" className="text-xs gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary border bg-background"><Building2 size={13} /> Properties</TabsTrigger>
+            <TabsTrigger value="profile" className="text-xs gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary border bg-background"><User size={13} /> Profile</TabsTrigger>
+            <TabsTrigger value="loginActivity" className="text-xs gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary border bg-background"><Activity size={13} /> Login Activity</TabsTrigger>
+            <TabsTrigger value="leadActivity" className="text-xs gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary border bg-background"><Activity size={13} /> Lead Activity</TabsTrigger>
           </TabsList>
 
           {!isManager && (
@@ -70,6 +73,12 @@ const SettingsPage = () => {
           </TabsContent>
           <TabsContent value="profile">
             <ProfileTab user={user || {}} />
+          </TabsContent>
+          <TabsContent value="loginActivity">
+            <LoginActivityTab />
+          </TabsContent>
+          <TabsContent value="leadActivity">
+            <LeadActivityTab />
           </TabsContent>
         </Tabs>
       </motion.div>

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Plus, Trash2, KeyRound, Loader2, Pencil } from 'lucide-react';
+import { LoginActivityTab, LeadActivityTab } from '@/components/ActivityTabs';
 
 interface ZoneOption {
   id: string;
@@ -56,7 +57,7 @@ export function SuperAdminSettingsPanel() {
   const [members, setAgents] = useState<Member[]>([]);
   const [zones, setZones] = useState<ZoneOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'managers' | 'admins' | 'members'>('managers');
+  const [activeTab, setActiveTab] = useState<'managers' | 'admins' | 'members' | 'login_activity' | 'lead_activity'>('managers');
 
   useEffect(() => {
     loadData();
@@ -94,18 +95,24 @@ export function SuperAdminSettingsPanel() {
   return (
     <div className="space-y-6">
       {/* Tabs */}
-      <div className="flex gap-2 border-b">
-        {(['managers', 'admins', 'members'] as const).map((tab) => (
+      <div className="flex gap-2 border-b overflow-x-auto pb-1 scrollbar-hide">
+        {[
+          { id: 'managers', label: 'Managers' },
+          { id: 'admins', label: 'Admins' },
+          { id: 'members', label: 'Members' },
+          { id: 'login_activity', label: 'Login Activity' },
+          { id: 'lead_activity', label: 'Lead Activity' }
+        ].map((tab) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-              activeTab === tab
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === tab.id
                 ? 'border-accent text-accent'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -119,6 +126,8 @@ export function SuperAdminSettingsPanel() {
           {activeTab === 'managers' && <ManagersSection managers={managers} onRefresh={loadData} />}
           {activeTab === 'admins' && <AdminsSection admins={admins} zones={zones} onRefresh={loadData} />}
           {activeTab === 'members' && <AgentsSection members={members} admins={admins} zones={zones} onRefresh={loadData} />}
+          {activeTab === 'login_activity' && <LoginActivityTab />}
+          {activeTab === 'lead_activity' && <LeadActivityTab />}
         </>
       )}
     </div>
