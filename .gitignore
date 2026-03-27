@@ -32,3 +32,4 @@ dist-ssr
 .next/
 out/
 build/
+next-env.d.ts
