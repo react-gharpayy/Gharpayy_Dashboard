@@ -262,3 +262,46 @@ export const useOfficeZones = () =>
     },
   });
 
+export type PipelineStageConfig = {
+  id?: string;
+  key: string;
+  label: string;
+  color: string;
+  order: number;
+};
+
+export const usePipelineStages = () =>
+  useQuery({
+    queryKey: ['pipeline-stages'],
+    queryFn: async () => {
+      const res = await fetch('/api/pipeline-stages');
+      if (!res.ok) throw new Error('Failed to fetch pipeline stages');
+      return res.json() as Promise<PipelineStageConfig[]>;
+    },
+  });
+
+export const useSavePipelineStages = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (stages: PipelineStageConfig[]) => {
+      const res = await fetch('/api/pipeline-stages', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stages }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to save pipeline stages');
+      }
+      return res.json();
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['pipeline-stages'] });
+      await qc.invalidateQueries({ queryKey: ['leads'] });
+      await qc.invalidateQueries({ queryKey: ['leads-paginated'] });
+      await qc.invalidateQueries({ queryKey: ['leads', 'status'] });
+      toast.success('Pipeline stages updated');
+    },
+  });
+};
+

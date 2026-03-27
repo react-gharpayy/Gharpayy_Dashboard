@@ -3,16 +3,23 @@
 import { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import AddLeadDialog from '@/components/AddLeadDialog';
+import EditLeadDialog from '@/components/EditLeadDialog';
 import { useLeadsPaginated, useOfficeZones } from '@/hooks/useCrmData';
 import { useBulkUpdateLeads, useDeleteLeads } from '@/hooks/useLeadDetails';
 import { useUpdateLead, useAgents, type LeadWithRelations } from '@/hooks/useCrmData';
 import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
-import { Filter, Download, Trash2, PhoneCall, MessageCircle } from 'lucide-react';
+import { Filter, Download, Trash2, PhoneCall, MessageCircle, MoreVertical } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -64,6 +71,8 @@ const Leads = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showFiltersMobile, setShowFiltersMobile] = useState(false);
   const [page, setPage] = useState(0);
+  const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<LeadWithRelations | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const PAGE_SIZE = 50;
   const { data: paginatedData, isLoading } = useLeadsPaginated(page, PAGE_SIZE);
   const leads = paginatedData?.leads;
@@ -139,6 +148,14 @@ const Leads = () => {
       await deleteLeads.mutateAsync(Array.from(selectedIds));
       toast.success(`${selectedIds.size} leads deleted`);
       setSelectedIds(new Set());
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handleDeleteLead = async (leadId: string) => {
+    if (!confirm('Delete this lead? This cannot be undone.')) return;
+    try {
+      await deleteLeads.mutateAsync([leadId]);
+      toast.success('Lead deleted');
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -406,6 +423,27 @@ const Leads = () => {
                       style={{ padding: 5, borderRadius: 6, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex' }} title="WhatsApp">
                       <MessageCircle size={12} color="#22c55e" />
                     </a>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button style={{ padding: 5, borderRadius: 6, background: T.bg2, border: `1px solid ${T.line}`, display: 'flex', cursor: 'pointer' }} title="More options">
+                          <MoreVertical size={12} color={T.mid} />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => { setSelectedLeadForEdit(lead); setEditDialogOpen(true); }}>
+                          Edit Lead
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteLead(lead.id)} 
+                          className="text-destructive focus:text-destructive"
+                          style={{ cursor: 'pointer' }}
+                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'white'; }}
+                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#ef4444'; }}
+                        >
+                          Delete Lead
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </div>
@@ -531,6 +569,13 @@ const Leads = () => {
           </div>
         </div>
       )}
+
+      {/* Edit Lead Dialog */}
+      <EditLeadDialog
+        lead={selectedLeadForEdit}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
     </AppLayout>
   );
 };

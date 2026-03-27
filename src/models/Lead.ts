@@ -4,7 +4,7 @@ export interface ILead extends Document {
   name: string;
   phone: string;
   email?: string;
-  status: 'new' | 'contacted' | 'qualified' | 'visit_scheduled' | 'visit_completed' | 'negotiation' | 'booked' | 'lost';
+  status: string;
   source: string;
   zone: string;
   firstResponseTimeMin?: number;
@@ -30,11 +30,7 @@ const LeadSchema: Schema = new Schema(
     name: { type: String, required: true },
     phone: { type: String, required: true },
     email: { type: String },
-    status: { 
-      type: String, 
-      enum: ['new', 'contacted', 'qualified', 'visit_scheduled', 'visit_completed', 'negotiation', 'booked', 'lost'],
-      default: 'new' 
-    },
+    status: { type: String, default: 'new' },
     source: { type: String, required: true },
     zone: { type: String, required: true },
     firstResponseTimeMin: { type: Number },

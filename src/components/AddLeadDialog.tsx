@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
-import { useCreateLead, useAgents, useOfficeZones } from '@/hooks/useCrmData';
+import { useCreateLead, useAgents, useOfficeZones, useUpdateLead, type LeadWithRelations } from '@/hooks/useCrmData';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { T, QUALITY, GEO_TECH_PARKS, FDISPLAY, buildKnowledgeSnapshot, tsNow, AREAS, haversine, roadDist, driveMin, nearestMetro, nearestTechParks, enrichLeadGeo, LINE_COLOR, TIER_COLOR } from '@/lib/leadGeoData';
@@ -153,13 +153,23 @@ function AIMatcher({ onClose }: { onClose: () => void }) {
 // ═══════════════════════════════════════════════════════════════════════
 type AddLeadDialogProps = {
   trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  editingLead?: LeadWithRelations | null;
 };
 
-const AddLeadDialog = ({ trigger }: AddLeadDialogProps) => {
+const AddLeadDialog = ({ trigger, open: controlledOpen, onOpenChange, editingLead }: AddLeadDialogProps) => {
   const { user } = useAuth();
   const canAddLead = user && ['super_admin', 'manager', 'admin', 'member'].includes(user.role);
-  const [open, setOpen] = useState(false);
+  const isEditMode = Boolean(editingLead);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (value: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(value);
+    onOpenChange?.(value);
+  };
   const createLead = useCreateLead();
+  const updateLead = useUpdateLead();
   const { data: members } = useAgents();
   const { data: officeZones } = useOfficeZones();
 
@@ -185,6 +195,60 @@ const AddLeadDialog = ({ trigger }: AddLeadDialogProps) => {
       setAssignedAgentId(user.id);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!isEditMode || !editingLead || !open) return;
+
+    const meta = (editingLead.parsedMetadata || {}) as Record<string, any>;
+    const sourceFromLead = (editingLead.source || '').toLowerCase();
+    const sourceFormat =
+      meta.sourceFormat ||
+      (sourceFromLead === 'whatsapp'
+        ? 'WhatsApp'
+        : sourceFromLead === 'website'
+          ? 'Website'
+          : sourceFromLead || 'Manual');
+
+    const notesList = String(editingLead.notes || '')
+      .split('|')
+      .map((n) => n.trim())
+      .filter(Boolean)
+      .map((text) => ({ text }));
+
+    setMode('single');
+    setBulkText('');
+    setBulkPreview(null);
+    setShowMatcher(false);
+    setParsed(null);
+    setRawText('');
+    setEdited({
+      name: editingLead.name || '',
+      phone: editingLead.phone || '',
+      email: editingLead.email || '',
+      location: editingLead.preferredLocation || '',
+      areas: meta.areas || [],
+      buildingName: meta.buildingName || '',
+      fullAddress: meta.fullAddress || '',
+      mapLinks: meta.mapLinks || [],
+      budget: editingLead.budget || '',
+      budgetRanges: meta.budgetRanges || [],
+      budgetRaw: editingLead.budget || '',
+      moveIn: editingLead.moveInDate || '',
+      moveInParsed: parseMoveInV2(editingLead.moveInDate || ''),
+      type: editingLead.profession || '',
+      room: editingLead.roomType || '',
+      need: editingLead.needPreference || '',
+      specialReqs: editingLead.specialRequests || '',
+      inBLR: meta.inBLR ?? null,
+      zone: (editingLead as any).zone || meta.zone || '',
+      zones: meta.zones || [],
+      techParks: meta.techParks || [],
+      source: sourceFormat,
+      quality: meta.quality || 'good',
+      notes: notesList,
+    });
+    setAssignedAgentId(editingLead.assignedMemberId || 'unassigned');
+  }, [isEditMode, editingLead, open]);
 
   const onTextChange = (v: string) => {
     setRawText(v);
@@ -216,8 +280,10 @@ const AddLeadDialog = ({ trigger }: AddLeadDialogProps) => {
 
     try {
       const targetAgentId = assignedMemberId === "unassigned" ? null : (assignedMemberId || (members?.[0] as any)?.id || null);
-      await createLead.mutateAsync({
-        name: edited.name, phone: edited.phone, email: edited.email || null,
+      const payload = {
+        name: edited.name,
+        phone: edited.phone,
+        email: edited.email || null,
         zone: edited.zone,
         source: edited.source === "Manual" ? "whatsapp" : "whatsapp",
         budget: edited.budget || null,
@@ -229,22 +295,42 @@ const AddLeadDialog = ({ trigger }: AddLeadDialogProps) => {
         specialRequests: edited.specialReqs || null,
         notes: edited.notes?.map((n: any) => n.text).join(" | ") || null,
         parsedMetadata: {
-          sourceFormat: edited.source, areas: edited.areas, zone, zones,
-          techParks, mapLinks: edited.mapLinks || [], buildingName: edited.buildingName || "",
-          fullAddress: edited.fullAddress || "", inBLR: edited.inBLR,
-          moveInRaw: edited.moveIn || "", moveInUrgency: moveInParsed?.urgency || "",
+          sourceFormat: edited.source,
+          areas: edited.areas,
+          zone,
+          zones,
+          techParks,
+          mapLinks: edited.mapLinks || [],
+          buildingName: edited.buildingName || "",
+          fullAddress: edited.fullAddress || "",
+          inBLR: edited.inBLR,
+          moveInRaw: edited.moveIn || "",
+          moveInUrgency: moveInParsed?.urgency || "",
           moveInUrgencyDays: moveInParsed?.urgencyDays ?? null,
           budgetRanges: edited.budgetRanges || [],
-          quality: quality,
+          quality,
         },
-        assignedMemberId: targetAgentId, status: 'new',
-      });
+        assignedMemberId: targetAgentId,
+      };
+
+      if (isEditMode && editingLead) {
+        await updateLead.mutateAsync({
+          id: editingLead.id,
+          ...payload,
+          status: editingLead.status,
+        });
+        toast.success("Lead updated successfully");
+        setOpen(false);
+        return;
+      }
+
+      await createLead.mutateAsync({ ...payload, status: 'new' });
       const sl: SessionLead = { id: Date.now(), addedAt: tsNow(), ...edited, zone, zones, techParks, quality, moveInParsed, rawText };
       setSessionLeads(prev => [sl, ...prev]);
       setRawText(""); setParsed(null); setEdited(null); 
       setAssignedAgentId(user?.role === 'member' ? user.id : 'unassigned');
       toast.success("✓ Lead saved to database!");
-    } catch (err: any) { toast.error(err.message || "Failed to create lead"); }
+    } catch (err: any) { toast.error(err.message || (isEditMode ? "Failed to update lead" : "Failed to create lead")); }
   };
 
   const doBulkParse = () => {
@@ -291,15 +377,17 @@ const AddLeadDialog = ({ trigger }: AddLeadDialogProps) => {
 
   return (
     <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) { setRawText(""); setParsed(null); setEdited(null); setBulkText(""); setBulkPreview(null); setSessionLeads([]); setShowMatcher(false); } }}>
-      <DialogTrigger asChild disabled={!canAddLead}>
-        {trigger || (
-          <Button size="sm" className="gap-1.5 text-xs" disabled={!canAddLead} title={!canAddLead ? 'Only Super Admins, managers, and admins can add leads' : ''}>
-            <Plus size={13} /> Add Lead
-          </Button>
-        )}
-      </DialogTrigger>
+      {!isEditMode && (
+        <DialogTrigger asChild disabled={!canAddLead}>
+          {trigger || (
+            <Button size="sm" className="gap-1.5 text-xs" disabled={!canAddLead} title={!canAddLead ? 'Only Super Admins, managers, and admins can add leads' : ''}>
+              <Plus size={13} /> Add Lead
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="w-[95vw] sm:max-w-[500px] h-[90vh] sm:h-[85vh] p-0 border-0 bg-transparent shadow-none [&>button]:hidden">
-        <DialogTitle className="sr-only">Add Lead</DialogTitle>
+        <DialogTitle className="sr-only">{isEditMode ? 'Edit Lead' : 'Add Lead'}</DialogTitle>
         {showMatcher && <AIMatcher onClose={() => setShowMatcher(false)} />}
         <div style={{ fontFamily: T.sans, background: T.bg0, height: "100%", color: T.text, borderRadius: 16, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 8px 60px rgba(0,0,0,0.12)" }}>
           <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap');`}</style>
@@ -309,12 +397,14 @@ const AddLeadDialog = ({ trigger }: AddLeadDialogProps) => {
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 35, height: 35, borderRadius: 9, background: `linear-gradient(135deg,${T.acc},${T.acc2})`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 16, color: "#fff", boxShadow: `0 0 20px rgba(108,92,231,0.25)` }}>G</div>
               <div>
-                <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 600, color: T.hi, letterSpacing: "0.04em" }}>Lead Intake</div>
+                <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 600, color: T.hi, letterSpacing: "0.04em" }}>{isEditMode ? 'Lead Edit' : 'Lead Intake'}</div>
                 <div style={{ fontSize: 9, color: T.dim, letterSpacing: "0.1em", textTransform: "uppercase" as const }}>Geo Intelligence Engine</div>
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button onClick={() => setShowMatcher(true)} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 7, background: T.goldDim, border: `1px solid rgba(196,136,13,0.25)`, color: T.gold, fontWeight: 600, cursor: "pointer" }}>⌖ AI Match</button>
+              {!isEditMode && (
+                <button onClick={() => setShowMatcher(true)} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 7, background: T.goldDim, border: `1px solid rgba(196,136,13,0.25)`, color: T.gold, fontWeight: 600, cursor: "pointer" }}>⌖ AI Match</button>
+              )}
               <button onClick={() => setOpen(false)} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 7, background: "transparent", border: `1px solid ${T.line}`, color: T.mid, cursor: "pointer" }}>✕ Close</button>
             </div>
           </div>
@@ -323,14 +413,22 @@ const AddLeadDialog = ({ trigger }: AddLeadDialogProps) => {
             {/* MAIN PANEL */}
             <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ background: T.bg1, border: `1px solid ${T.line}`, borderRadius: 9, padding: 3, display: "flex", gap: 2 }}>
-                {([["single", "📋 Single Lead"], ["bulk", "📦 Bulk Import"]] as const).map(([m, lbl]) => (<button key={m} onClick={() => setMode(m as any)} style={{ flex: 1, padding: "8px 0", borderRadius: 7, fontSize: 12.5, fontWeight: mode === m ? 700 : 400, background: mode === m ? `linear-gradient(135deg,${T.acc},${T.acc2})` : "transparent", color: mode === m ? T.bg0 : T.mid, border: "none", cursor: "pointer" }}>{lbl}</button>))}
+                {([["single", "📋 Single Lead"], ["bulk", "📦 Bulk Import"]] as const)
+                  .filter(([m]) => !isEditMode || m === 'single')
+                  .map(([m, lbl]) => (
+                    <button key={m} onClick={() => setMode(m as any)} style={{ flex: 1, padding: "8px 0", borderRadius: 7, fontSize: 12.5, fontWeight: mode === m ? 700 : 400, background: mode === m ? `linear-gradient(135deg,${T.acc},${T.acc2})` : "transparent", color: mode === m ? T.bg0 : T.mid, border: "none", cursor: "pointer" }}>{lbl}</button>
+                  ))}
               </div>
 
               {mode === "single" && <>
-                <div style={{ fontSize: 9.5, color: T.dim, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.09em" }}>Paste Form</div>
-                <textarea value={rawText} onChange={e => onTextChange(e.target.value)}
-                  placeholder={"Paste any WhatsApp / Gharpayy lead form…\nAll formats detected automatically."}
-                  style={{ width: "100%", minHeight: 160, maxHeight: 400, background: T.bg1, border: `1px solid ${rawText ? T.line2 : T.line}`, borderRadius: 9, padding: "10px 12px", fontFamily: T.mono, fontSize: 11, color: T.text, resize: "vertical" as const, lineHeight: 1.7, outline: "none" }} />
+                {!isEditMode && (
+                  <>
+                    <div style={{ fontSize: 9.5, color: T.dim, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.09em" }}>Paste Form</div>
+                    <textarea value={rawText} onChange={e => onTextChange(e.target.value)}
+                      placeholder={"Paste any WhatsApp / Gharpayy lead form…\nAll formats detected automatically."}
+                      style={{ width: "100%", minHeight: 160, maxHeight: 400, background: T.bg1, border: `1px solid ${rawText ? T.line2 : T.line}`, borderRadius: 9, padding: "10px 12px", fontFamily: T.mono, fontSize: 11, color: T.text, resize: "vertical" as const, lineHeight: 1.7, outline: "none" }} />
+                  </>
+                )}
 
                 {edited ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -401,15 +499,19 @@ const AddLeadDialog = ({ trigger }: AddLeadDialogProps) => {
                     <div style={{ background: T.bg1, border: `1px solid ${T.line}`, borderRadius: 7, padding: "9px 11px" }}>
                       <NotesBox notes={edited.notes || []} onAdd={n => setEdited({ ...edited, notes: [...(edited.notes || []), n] })} onDelete={i => setEdited({ ...edited, notes: (edited.notes || []).filter((_: any, j: number) => j !== i) })} />
                     </div>
-                    <button onClick={saveSingle} disabled={createLead.isPending}
-                      style={{ background: createLead.isPending ? T.bg3 : `linear-gradient(135deg,${T.acc},${T.acc2})`, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 13, fontWeight: 700, letterSpacing: "0.02em", boxShadow: "0 4px 22px rgba(108,92,231,0.22)", cursor: createLead.isPending ? "not-allowed" : "pointer" }}>
-                      {createLead.isPending ? "Saving…" : "Save Lead →"}
+                    <button onClick={saveSingle} disabled={createLead.isPending || updateLead.isPending}
+                      style={{ background: (createLead.isPending || updateLead.isPending) ? T.bg3 : `linear-gradient(135deg,${T.acc},${T.acc2})`, color: "#fff", border: "none", borderRadius: 10, padding: "13px", fontSize: 13, fontWeight: 700, letterSpacing: "0.02em", boxShadow: "0 4px 22px rgba(108,92,231,0.22)", cursor: (createLead.isPending || updateLead.isPending) ? "not-allowed" : "pointer" }}>
+                      {(createLead.isPending || updateLead.isPending) ? "Saving…" : (isEditMode ? "Update Lead" : "Save Lead →")}
                     </button>
                   </div>
                 ) : (
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: 50, gap: 10 }}>
                     <div style={{ fontSize: 44, opacity: 0.3 }}>📋</div>
-                    <p style={{ fontSize: 12.5, color: T.dim, textAlign: "center", lineHeight: 1.8 }}>Paste any lead form above.<br />Or use <button onClick={() => setShowMatcher(true)} style={{ background: "transparent", border: "none", color: T.gold, fontSize: 12.5, cursor: "pointer", fontWeight: 600, padding: 0 }}>⌖ AI Match</button> for intelligent area matching.</p>
+                    <p style={{ fontSize: 12.5, color: T.dim, textAlign: "center", lineHeight: 1.8 }}>
+                      {isEditMode
+                        ? 'Lead data is loading...'
+                        : <>Paste any lead form above.<br />Or use <button onClick={() => setShowMatcher(true)} style={{ background: "transparent", border: "none", color: T.gold, fontSize: 12.5, cursor: "pointer", fontWeight: 600, padding: 0 }}>⌖ AI Match</button> for intelligent area matching.</>}
+                    </p>
                   </div>
                 )}
               </>}
