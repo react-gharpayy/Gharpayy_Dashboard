@@ -3,7 +3,6 @@ import bcrypt from 'bcryptjs';
 import connectToDatabase from '@/lib/mongodb';
 import User from '@/models/User';
 import { getAuthUserFromCookie, normalizeUsername } from '@/lib/auth';
-import { sendInvitationEmail } from '@/lib/email';
 
 export async function GET(req: Request) {
   try {
@@ -56,7 +55,7 @@ export async function POST(req: Request) {
     const authUser = await getAuthUserFromCookie();
     if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (authUser.role !== 'super_admin') {
-      return NextResponse.json({ error: 'Only Super Admin can invite users' }, { status: 403 });
+      return NextResponse.json({ error: 'Only Super Admin can add users' }, { status: 403 });
     }
 
     const body = await req.json();
@@ -104,8 +103,7 @@ export async function POST(req: Request) {
       password: hashedPassword,
       fullName: fullName.trim(),
       role,
-      status: 'invited',
-      invitedAt: new Date(),
+      status: 'active',
       zones: body.zones || [],
     };
 
@@ -134,17 +132,6 @@ export async function POST(req: Request) {
       await User.findByIdAndUpdate(adminId, { $push: { adminIds: user._id } });
     }
 
-    // Send invitation email (non-blocking — uses the plain password before hashing)
-    const appUrl = req.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL;
-    await sendInvitationEmail(
-      email.trim().toLowerCase(),
-      fullName.trim(),
-      email.trim().toLowerCase(),
-      password,
-      role,
-      appUrl || undefined
-    );
-
     return NextResponse.json(
       {
         id: user._id.toString(),
@@ -154,7 +141,7 @@ export async function POST(req: Request) {
         username: user.username,
         role: user.role,
         status: user.status,
-        message: 'User invited successfully',
+        message: 'User added successfully',
       },
       { status: 201 }
     );

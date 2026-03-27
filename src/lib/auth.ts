@@ -7,7 +7,11 @@ import User from '@/models/User';
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_change_me';
 const ZONES = ['Zone1', 'Zone2', 'Zone3', 'Zone4', 'Zone5'] as const;
 const DEFAULT_ADMIN_PASSWORD = '12345678';
-const DEFAULT_SUPER_ADMIN_PHONE = '70158 86489';
+const DEFAULT_SUPER_ADMIN_PHONE = '7015886489';
+const CANONICAL_SUPER_ADMIN_USERNAME = 'superadmin@gharpayy.com';
+const CANONICAL_SUPER_ADMIN_EMAIL = 'superadmin@gharpayy.com';
+const LEGACY_SUPER_ADMIN_USERNAME = 'superadmin@gharpayy';
+const LEGACY_SUPER_ADMIN_EMAIL = 'superadmin@gharpayy';
 const ZONE_ADMIN_NAMES: Record<ZoneName, string> = {
   Zone1: 'AK',
   Zone2: 'BK',
@@ -31,15 +35,33 @@ export type AuthTokenPayload = {
 export async function ensureDefaultCEO() {
   await connectToDatabase();
 
-  const ceoUsername = normalizeUsername('superadmin@gharpayy');
-  const ceoEmail = 'superadmin@gharpayy';
+  const ceoUsername = normalizeUsername(CANONICAL_SUPER_ADMIN_USERNAME);
+  const ceoEmail = CANONICAL_SUPER_ADMIN_EMAIL;
+  const legacyCeoUsername = normalizeUsername(LEGACY_SUPER_ADMIN_USERNAME);
+  const legacyCeoEmail = LEGACY_SUPER_ADMIN_EMAIL;
   const ceoFullName = 'Gharpayy';
   const ceoPassword = '12345678';
   const ceoPhone = DEFAULT_SUPER_ADMIN_PHONE;
-  const existing = await User.findOne({ username: ceoUsername });
+  const candidates = await User.find({
+    $or: [
+      { username: ceoUsername },
+      { email: ceoEmail },
+      { username: legacyCeoUsername },
+      { email: legacyCeoEmail },
+    ],
+  });
+
+  const existing =
+    candidates.find((u: any) => u.username === ceoUsername || u.email === ceoEmail) ||
+    candidates.find((u: any) => u.username === legacyCeoUsername || u.email === legacyCeoEmail) ||
+    null;
 
   if (existing) {
     let changed = false;
+    if (existing.username !== ceoUsername) {
+      existing.username = ceoUsername;
+      changed = true;
+    }
     if (existing.role !== 'super_admin') {
       existing.role = 'super_admin';
       changed = true;
@@ -48,7 +70,7 @@ export async function ensureDefaultCEO() {
       existing.fullName = ceoFullName;
       changed = true;
     }
-    if (!existing.email) {
+    if (existing.email !== ceoEmail) {
       existing.email = ceoEmail;
       changed = true;
     }
@@ -131,13 +153,44 @@ export async function getAuthUserFromCookie() {
     const decoded = jwt.verify(token, JWT_SECRET) as AuthTokenPayload;
     await connectToDatabase();
 
-    const user = await User.findById(decoded.userId).select('-password');
+    let user = await User.findById(decoded.userId).select('-password');
     if (!user) return null;
 
-    // Ensure super admin always has a default phone persisted.
-    if (user.role === 'super_admin' && !user.phone) {
-      user.phone = DEFAULT_SUPER_ADMIN_PHONE;
-      await user.save();
+    // Resolve legacy super admin identity to canonical .com account.
+    if (user.role === 'super_admin') {
+      const isLegacyIdentity =
+        user.username === LEGACY_SUPER_ADMIN_USERNAME || user.email === LEGACY_SUPER_ADMIN_EMAIL;
+
+      if (isLegacyIdentity) {
+        const canonicalUser = await User.findOne({
+          $or: [
+            { username: CANONICAL_SUPER_ADMIN_USERNAME },
+            { email: CANONICAL_SUPER_ADMIN_EMAIL },
+          ],
+        }).select('-password');
+
+        if (canonicalUser && canonicalUser._id.toString() !== user._id.toString()) {
+          user = canonicalUser;
+        } else {
+          let changed = false;
+          if (user.username !== CANONICAL_SUPER_ADMIN_USERNAME) {
+            user.username = CANONICAL_SUPER_ADMIN_USERNAME;
+            changed = true;
+          }
+          if (user.email !== CANONICAL_SUPER_ADMIN_EMAIL) {
+            user.email = CANONICAL_SUPER_ADMIN_EMAIL;
+            changed = true;
+          }
+          if (changed) {
+            await user.save();
+          }
+        }
+      }
+
+      if (!user.phone) {
+        user.phone = DEFAULT_SUPER_ADMIN_PHONE;
+        await user.save();
+      }
     }
 
     return {

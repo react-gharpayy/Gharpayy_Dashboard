@@ -108,8 +108,8 @@ export function SuperAdminSettingsPanel() {
 function UsersTab() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [subTab, setSubTab] = useState<'active' | 'inactive' | 'invited' | 'deleted'>('active');
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [subTab, setSubTab] = useState<'active' | 'inactive' | 'deleted'>('active');
+  const [showAddUserDialog, setShowAddUserDialog] = useState(false);
   const [managers, setManagers] = useState<RoleUser[]>([]);
   const [admins, setAdmins] = useState<RoleUser[]>([]);
   const [zones, setZones] = useState<ZoneOption[]>([]);
@@ -166,31 +166,18 @@ function UsersTab() {
     }
   };
 
-  const handleCancelInvite = async (userId: string) => {
-    if (!confirm('Cancel this invitation? The user will be permanently removed.')) return;
-    try {
-      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error((await res.json()).error);
-      toast.success('Invitation cancelled');
-      loadUsers();
-    } catch (err: any) {
-      toast.error(err.message);
-    }
-  };
-
   const statusCounts = {
     active: users.filter((u) => (u.status || 'active') === 'active').length,
     inactive: users.filter((u) => u.status === 'inactive').length,
-    invited: users.filter((u) => u.status === 'invited').length,
     deleted: users.filter((u) => u.status === 'deleted').length,
   };
 
   return (
     <div className="space-y-4">
-      {/* Invite User Button + Sub-tabs */}
+      {/* Add User Button + Sub-tabs */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex gap-1 bg-secondary/50 rounded-lg p-1">
-          {(['active', 'inactive', 'invited', 'deleted'] as const).map((tab) => (
+          {(['active', 'inactive', 'deleted'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setSubTab(tab)}
@@ -212,22 +199,22 @@ function UsersTab() {
           ))}
         </div>
 
-        <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <Dialog open={showAddUserDialog} onOpenChange={setShowAddUserDialog}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5">
-              <UserPlus size={14} /> Invite User
+              <UserPlus size={14} /> Add User
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Invite New User</DialogTitle>
+              <DialogTitle>Add New User</DialogTitle>
             </DialogHeader>
-            <InviteUserForm
+            <AddUserForm
               managers={managers}
               admins={admins}
               zones={zones}
               onSuccess={() => {
-                setShowInviteDialog(false);
+                setShowAddUserDialog(false);
                 loadUsers();
                 loadSupportData();
               }}
@@ -304,14 +291,6 @@ function UsersTab() {
                         </DropdownMenuItem>
                       </>
                     )}
-                    {subTab === 'invited' && (
-                      <DropdownMenuItem
-                        onClick={() => handleCancelInvite(user.id)}
-                        className="text-destructive"
-                      >
-                        Cancel Invitation
-                      </DropdownMenuItem>
-                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -328,8 +307,8 @@ function UsersTab() {
   );
 }
 
-/* ========== INVITE USER FORM ========== */
-function InviteUserForm({
+/* ========== ADD USER FORM ========== */
+function AddUserForm({
   managers,
   admins,
   zones,
@@ -368,7 +347,7 @@ function InviteUserForm({
       });
 
       if (!res.ok) throw new Error((await res.json()).error);
-      toast.success('User invited successfully! Invitation email sent.');
+      toast.success('User added successfully.');
       onSuccess();
     } catch (err: any) {
       toast.error(err.message);
@@ -464,7 +443,7 @@ function InviteUserForm({
 
       <Button onClick={handleSubmit} disabled={saving} className="w-full gap-1.5">
         <UserPlus size={14} />
-        {saving ? 'Sending Invitation...' : 'Invite User'}
+        {saving ? 'Adding User...' : 'Add User'}
       </Button>
     </div>
   );
