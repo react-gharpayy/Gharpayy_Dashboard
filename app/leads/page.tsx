@@ -73,6 +73,12 @@ const Leads = () => {
   const [page, setPage] = useState(0);
   const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<LeadWithRelations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  
+  // Date filter state
+  const [filterDateMode, setFilterDateMode] = useState<'all' | 'date' | 'month'>('all');
+  const [filterDate, setFilterDate] = useState<string>('');
+  const [filterMonth, setFilterMonth] = useState<string>('');
+  
   const PAGE_SIZE = 50;
   const { data: paginatedData, isLoading } = useLeadsPaginated(page, PAGE_SIZE);
   const leads = paginatedData?.leads;
@@ -104,6 +110,37 @@ const Leads = () => {
       if (filterDuplicate === 'duplicate' && !l.isDuplicate) return false;
       if (filterDuplicate === 'unique' && l.isDuplicate) return false;
       if (filterZone !== 'all' && (l as any).zone !== filterZone) return false;
+      
+      // Date filter logic - when a date filter is active, ONLY show leads with valid moveInDate
+      if (filterDateMode !== 'all') {
+        // If no moveInDate, exclude the lead
+        if (!l.moveInDate) return false;
+        
+        const parsed = parseMoveInV2(l.moveInDate);
+        // If moveInDate couldn't be parsed, exclude the lead
+        if (!parsed || !parsed.resolved) return false;
+        
+        const leadDate = parsed.resolved;
+        
+        if (filterDateMode === 'date' && filterDate) {
+          // Filter by specific date
+          const filterDateObj = new Date(filterDate);
+          if (
+            leadDate.getFullYear() !== filterDateObj.getFullYear() ||
+            leadDate.getMonth() !== filterDateObj.getMonth() ||
+            leadDate.getDate() !== filterDateObj.getDate()
+          ) {
+            return false;
+          }
+        } else if (filterDateMode === 'month' && filterMonth) {
+          // Filter by month and year
+          const [year, month] = filterMonth.split('-').map(Number);
+          if (leadDate.getFullYear() !== year || leadDate.getMonth() + 1 !== month) {
+            return false;
+          }
+        }
+      }
+      
       return true;
     })
     .sort((a, b) => {
@@ -194,7 +231,7 @@ const Leads = () => {
         <div className="flex items-center justify-between">
           <Button variant="outline" size="sm" onClick={() => setShowFiltersMobile(!showFiltersMobile)} className="ml-1.5 md:ml-0 gap-2 h-8 text-xs rounded-xl md:hidden">
             <Filter size={14} /> Filters
-            {(!showFiltersMobile && (filterSource !== 'all' || filterStatus !== 'all' || sortBy !== 'newest' || filterDuplicate !== 'all' || filterZone !== 'all')) && <div className="w-1.5 h-1.5 rounded-full bg-accent" />}
+            {(!showFiltersMobile && (filterSource !== 'all' || filterStatus !== 'all' || sortBy !== 'newest' || filterDuplicate !== 'all' || filterZone !== 'all' || filterDateMode !== 'all')) && <div className="w-1.5 h-1.5 rounded-full bg-accent" />}
           </Button>
 
           {/* Desktop Filters */}
@@ -223,6 +260,38 @@ const Leads = () => {
               <option value="all">All Zones</option>
               {officeZones?.map(z => <option key={z._id} value={z.name}>{z.name}</option>)}
             </select>
+            
+            {/* Date Filter Mode */}
+            <select value={filterDateMode} onChange={e => {
+              setFilterDateMode(e.target.value as any);
+              setFilterDate('');
+              setFilterMonth('');
+            }} className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30">
+              <option value="all">All Dates</option>
+              <option value="date">By Date</option>
+              <option value="month">By Month</option>
+            </select>
+            
+            {/* Date input - appears when "By Date" is selected */}
+            {filterDateMode === 'date' && (
+              <input 
+                type="date" 
+                value={filterDate}
+                onChange={e => setFilterDate(e.target.value)}
+                className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30"
+              />
+            )}
+            
+            {/* Month input - appears when "By Month" is selected */}
+            {filterDateMode === 'month' && (
+              <input 
+                type="month" 
+                value={filterMonth}
+                onChange={e => setFilterMonth(e.target.value)}
+                className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30"
+              />
+            )}
+            
             <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30">
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
@@ -260,6 +329,38 @@ const Leads = () => {
               <option value="all">All Zones</option>
               {officeZones?.map(z => <option key={z._id} value={z.name}>{z.name}</option>)}
             </select>
+            
+            {/* Date Filter Mode */}
+            <select value={filterDateMode} onChange={e => {
+              setFilterDateMode(e.target.value as any);
+              setFilterDate('');
+              setFilterMonth('');
+            }} className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none">
+              <option value="all">All Dates</option>
+              <option value="date">By Date</option>
+              <option value="month">By Month</option>
+            </select>
+            
+            {/* Date input - appears when "By Date" is selected */}
+            {filterDateMode === 'date' && (
+              <input 
+                type="date" 
+                value={filterDate}
+                onChange={e => setFilterDate(e.target.value)}
+                className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none"
+              />
+            )}
+            
+            {/* Month input - appears when "By Month" is selected */}
+            {filterDateMode === 'month' && (
+              <input 
+                type="month" 
+                value={filterMonth}
+                onChange={e => setFilterMonth(e.target.value)}
+                className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none"
+              />
+            )}
+            
             <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none">
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>

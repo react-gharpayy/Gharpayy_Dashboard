@@ -290,7 +290,7 @@ export const FDISPLAY = [
   { key: "location", label: "Areas", icon: "📍" },
   { key: "fullAddress", label: "Full Address", icon: "🏠" },
   { key: "budget", label: "Budget", icon: "💰" },
-  { key: "moveIn", label: "Move-in", icon: "📅" },
+  { key: "moveIn", label: "Move in date", icon: "📅" },
   { key: "type", label: "Type", icon: "💼" },
   { key: "room", label: "Room", icon: "🛏" },
   { key: "need", label: "Need", icon: "👥" },

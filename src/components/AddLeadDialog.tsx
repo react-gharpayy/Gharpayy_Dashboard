@@ -272,6 +272,7 @@ const AddLeadDialog = ({ trigger, open: controlledOpen, onOpenChange, editingLea
     if (!edited) return;
     if (!edited.name || !edited.phone) { toast.error("Name and phone are required"); return; }
     if (!String(edited.zone || '').trim()) { toast.error("Please select a Zone before saving"); return; }
+    if (!edited.moveIn || !String(edited.moveIn || '').trim()) { toast.error("Move in date is required"); return; }
     const zones: string[] = []; // No auto-detection
     const zone = edited.zone;
     const techParks = GEO_TECH_PARKS.filter(p => p.kw.some(k => (edited.location + " " + rawText).toLowerCase().includes(k))).map(p => p.name);
@@ -351,6 +352,9 @@ const AddLeadDialog = ({ trigger, open: controlledOpen, onOpenChange, editingLea
         const zone = p.zone;
         if (!zone) {
           throw new Error(`Lead "${p.name}" requires a zone to be assigned.`);
+        }
+        if (!p.moveIn || !String(p.moveIn || '').trim()) {
+          throw new Error(`Lead "${p.name}" requires a move in date.`);
         }
         const techParks = GEO_TECH_PARKS.filter(tp => tp.kw.some(k => ((p.location || "")).toLowerCase().includes(k))).map(tp => tp.name);
         const mip = parseMoveInV2(p.moveIn || "");
