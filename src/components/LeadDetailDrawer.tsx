@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
-import { useUpdateLead, useAgents, type LeadWithRelations } from '@/hooks/useCrmData';
+import { useUpdateLead, useAgents, usePipelineStages, type LeadWithRelations } from '@/hooks/useCrmData';
 import { useConversations, useFollowUps, useCreateFollowUp } from '@/hooks/useLeadDetails';
 import { useActivityLog } from '@/hooks/useActivityLog';
 import { useBookingsByLead } from '@/hooks/useBookings';
@@ -39,6 +39,10 @@ const LeadDetailDrawer = ({ lead, open, onClose }: Props) => {
   const { data: members } = useAgents();
   const { user } = useAuth();
   const canAssignLead = ['super_admin', 'manager', 'admin'].includes(user?.role || '');
+  const { data: pipelineStagesData } = usePipelineStages();
+  const pipelineStages = (pipelineStagesData && pipelineStagesData.length > 0)
+    ? pipelineStagesData
+    : PIPELINE_STAGES.map((s, i) => ({ ...s, order: i }));
   const { data: conversations } = useConversations(lead?.id);
   const { data: followUps } = useFollowUps(lead?.id);
   const { data: activityLog } = useActivityLog(lead?.id);
@@ -83,7 +87,7 @@ const LeadDetailDrawer = ({ lead, open, onClose }: Props) => {
 
   if (!lead) return null;
 
-  const stage = PIPELINE_STAGES.find(s => s.key === lead.status);
+  const stage = pipelineStages.find((s: any) => s.key === lead.status);
   const score = lead.leadScore ?? 0;
   const parsedMetadata = ((lead as any).parsedMetadata || {}) as Record<string, any>;
   const parsedTechParks: string[] = Array.isArray(parsedMetadata.techParks) ? parsedMetadata.techParks : [];
@@ -184,6 +188,12 @@ const LeadDetailDrawer = ({ lead, open, onClose }: Props) => {
               {lead.needPreference ? <div className="flex items-center gap-2 text-xs text-foreground"><Users size={12} className="text-muted-foreground" /> Need: {lead.needPreference}</div> : null}
               <div className="flex items-center gap-2 text-xs text-foreground"><Clock size={12} className="text-muted-foreground" /> {(lead as any).firstResponseTimeMin != null ? `${(lead as any).firstResponseTimeMin}m response` : 'No response yet'}</div>
               <div className="flex items-center gap-2 text-xs text-foreground"><User size={12} className="text-muted-foreground" /> {(lead as any).members?.name || 'Unassigned'}</div>
+              {lead.status ? (
+                <div className="flex items-center gap-2 text-xs text-foreground">
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'currentColor', opacity: 0.6, flexShrink: 0, display: 'inline-block' }} className="text-accent" />
+                  Stage: <span className="font-semibold text-foreground">{stage?.label || lead.status}</span>
+                </div>
+              ) : null}
               {lead.specialRequests ? (
                 <div className="sm:col-span-2 rounded-lg bg-secondary/60 px-3 py-2 text-xs text-foreground flex items-start gap-2">
                   <StickyNote size={12} className="text-muted-foreground mt-0.5" />
@@ -288,7 +298,7 @@ const LeadDetailDrawer = ({ lead, open, onClose }: Props) => {
               <Select value={selectedStatus || lead.status} onValueChange={handleStatusChange}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {PIPELINE_STAGES.map(s => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
+                  {pipelineStages.map((s: any) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

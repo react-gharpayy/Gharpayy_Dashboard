@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import Lead from '@/models/Lead';
+import PipelineStage from '@/models/PipelineStage';
 import { getAuthUserFromCookie } from '@/lib/auth';
 
-type LeaderboardPeriod = 'this_month' | 'all_time' | 'today' | 'last_30_days';
+type LeaderboardPeriod = 'this_month' | 'all_time' | 'today' | 'last_30_days' | 'custom';
 
 function getPeriodBounds(period: LeaderboardPeriod) {
   const now = new Date();
@@ -36,22 +37,59 @@ export async function GET(req: NextRequest) {
     await connectToDatabase();
 
     const periodQuery = req.nextUrl.searchParams.get('period') as LeaderboardPeriod | null;
-    const period: LeaderboardPeriod = periodQuery && ['this_month', 'all_time', 'today', 'last_30_days'].includes(periodQuery)
+    const period: LeaderboardPeriod = periodQuery && ['this_month', 'all_time', 'today', 'last_30_days', 'custom'].includes(periodQuery)
       ? periodQuery
       : 'this_month';
 
-    const { from, to } = getPeriodBounds(period);
+    const fromQuery = req.nextUrl.searchParams.get('from');
+    const toQuery = req.nextUrl.searchParams.get('to');
+    const zoneQuery = req.nextUrl.searchParams.get('zone');
+
+    let from: Date | null = null;
+    let to: Date | null = null;
+
+    if (period === 'custom' && fromQuery && toQuery) {
+      from = new Date(fromQuery);
+      to = new Date(toQuery);
+      if (!isNaN(to.getTime())) {
+        to.setUTCHours(23, 59, 59, 999);
+      }
+    } else if (period !== 'custom') {
+      const bounds = getPeriodBounds(period as 'this_month' | 'all_time' | 'today' | 'last_30_days');
+      from = bounds.from;
+      to = bounds.to;
+    }
 
     const leadMatch: Record<string, any> = {
       createdBy: { $ne: null },
     };
 
-    if (from && to) {
+    if (zoneQuery && zoneQuery !== 'all') {
+      leadMatch.zone = zoneQuery;
+    }
+
+    if (from && to && !isNaN(from.getTime()) && !isNaN(to.getTime())) {
       leadMatch.createdAt = { $gte: from, $lte: to };
     }
 
+    const pipelineStages = await PipelineStage.find().lean();
+    const branches = pipelineStages.map((stage: any) => ({
+      case: { $eq: ['$status', stage.key] },
+      then: (stage.order || 0) + 1,
+    }));
+
     const rows = await Lead.aggregate([
       { $match: leadMatch },
+      {
+        $addFields: {
+          leadScoreVal: branches.length > 0 ? {
+            $switch: {
+              branches,
+              default: 1
+            }
+          } : 1
+        }
+      },
       {
         $group: {
           _id: {
@@ -61,12 +99,14 @@ export async function GET(req: NextRequest) {
             },
           },
           count: { $sum: 1 },
+          score: { $sum: '$leadScoreVal' }
         },
       },
       {
         $group: {
           _id: '$_id.createdBy',
           leadsCreated: { $sum: '$count' },
+          score: { $sum: '$score' },
           zones: {
             $push: {
               zone: '$_id.zone',
@@ -98,6 +138,7 @@ export async function GET(req: NextRequest) {
             $ifNull: ['$user.fullName', '$user.username'],
           },
           role: '$user.role',
+          score: 1,
           leadsCreated: 1,
           zones: {
             $filter: {
@@ -108,7 +149,7 @@ export async function GET(req: NextRequest) {
           },
         },
       },
-      { $sort: { leadsCreated: -1, name: 1, userId: 1 } },
+      { $sort: { score: -1, leadsCreated: -1, name: 1, userId: 1 } },
     ]);
 
     const rankings = rows.map((row: any, idx: number) => ({
@@ -116,6 +157,7 @@ export async function GET(req: NextRequest) {
       userId: row.userId,
       name: row.name || 'Unknown User',
       role: row.role,
+      score: row.score || 0,
       leadsCreated: row.leadsCreated,
       zones: (row.zones || []).sort((a: any, b: any) => {
         if (b.count !== a.count) return b.count - a.count;

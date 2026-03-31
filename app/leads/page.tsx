@@ -4,7 +4,7 @@ import { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import AddLeadDialog from '@/components/AddLeadDialog';
 import EditLeadDialog from '@/components/EditLeadDialog';
-import { useLeadsPaginated, useOfficeZones } from '@/hooks/useCrmData';
+import { useLeadsPaginated, useOfficeZones, usePipelineStages } from '@/hooks/useCrmData';
 import { useBulkUpdateLeads, useDeleteLeads } from '@/hooks/useLeadDetails';
 import { useUpdateLead, useAgents, type LeadWithRelations } from '@/hooks/useCrmData';
 import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
@@ -85,6 +85,10 @@ const Leads = () => {
   const totalPages = Math.ceil(totalLeads / PAGE_SIZE);
   const { data: members } = useAgents();
   const { data: officeZones } = useOfficeZones();
+  const { data: pipelineStagesData } = usePipelineStages();
+  const pipelineStages = (pipelineStagesData && pipelineStagesData.length > 0)
+    ? pipelineStagesData
+    : PIPELINE_STAGES.map((s, i) => ({ ...s, order: i }));
   const bulkUpdate = useBulkUpdateLeads();
   const deleteLeads = useDeleteLeads();
   const updateLead = useUpdateLead();
@@ -218,7 +222,7 @@ const Leads = () => {
   }
 
   return (
-    <AppLayout title="All Leads" subtitle={`${filtered.length} leads found`} actions={<AddLeadDialog />}>
+    <AppLayout title="All Leads" subtitle={`${filtered.length} leads found`} actions={<AddLeadDialog />} showQuickAddLead={false}>
       {/* Filters Area */}
       <div className="flex flex-col gap-3 mb-5">
         <div className="flex items-center justify-between">
@@ -236,35 +240,56 @@ const Leads = () => {
               className="h-8 text-2xs rounded-xl w-48 bg-card border-border"
             />
             <Filter size={13} className="text-muted-foreground shrink-0" />
-            <select value={filterSource} onChange={e => setFilterSource(e.target.value)} className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30">
-              <option value="all">All Sources</option>
-              {Object.entries(SOURCE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30">
-              <option value="all">All Stages</option>
-              {PIPELINE_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-            <select value={filterDuplicate} onChange={e => setFilterDuplicate(e.target.value)} className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30">
-              <option value="all">All Records</option>
-              <option value="unique">Unique Only</option>
-              <option value="duplicate">Duplicates Only</option>
-            </select>
-            <select value={filterZone} onChange={e => setFilterZone(e.target.value)} className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30">
-              <option value="all">All Zones</option>
-              {officeZones?.map(z => <option key={z._id} value={z.name}>{z.name}</option>)}
-            </select>
-            
+            <Select value={filterSource} onValueChange={setFilterSource}>
+              <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[110px] bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom" align="start">
+                <SelectItem value="all">All Sources</SelectItem>
+                {Object.entries(SOURCE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v as string}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[110px] bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom" align="start">
+                <SelectItem value="all">All Stages</SelectItem>
+                {pipelineStages.map((s: any) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterDuplicate} onValueChange={setFilterDuplicate}>
+              <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[110px] bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom" align="start">
+                <SelectItem value="all">All Records</SelectItem>
+                <SelectItem value="unique">Unique Only</SelectItem>
+                <SelectItem value="duplicate">Duplicates Only</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterZone} onValueChange={setFilterZone}>
+              <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[100px] bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom" align="start">
+                <SelectItem value="all">All Zones</SelectItem>
+                {officeZones?.map(z => <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
             {/* Date + Sort mode */}
-            <select value={filterDateMode} onChange={e => {
-              setFilterDateMode(e.target.value as any);
-              setFilterDate('');
-              setFilterMonth('');
-            }} className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30">
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="date">By Date</option>
-              <option value="month">By Month</option>
-            </select>
+            <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); }}>
+              <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[110px] bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom" align="start">
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
+                <SelectItem value="date">By Date</SelectItem>
+                <SelectItem value="month">By Month</SelectItem>
+              </SelectContent>
+            </Select>
             
             {/* Date input - appears when "By Date" is selected */}
             {filterDateMode === 'date' && (
@@ -302,35 +327,56 @@ const Leads = () => {
               onChange={e => setSearchQuery(e.target.value)}
               className="h-8 text-xs rounded-lg w-full bg-card border-border"
             />
-            <select value={filterSource} onChange={e => setFilterSource(e.target.value)} className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none">
-              <option value="all">All Sources</option>
-              {Object.entries(SOURCE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none">
-              <option value="all">All Stages</option>
-              {PIPELINE_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-            <select value={filterDuplicate} onChange={e => setFilterDuplicate(e.target.value)} className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none">
-              <option value="all">All Records</option>
-              <option value="unique">Unique Only</option>
-              <option value="duplicate">Duplicates Only</option>
-            </select>
-            <select value={filterZone} onChange={e => setFilterZone(e.target.value)} className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none">
-              <option value="all">All Zones</option>
-              {officeZones?.map(z => <option key={z._id} value={z.name}>{z.name}</option>)}
-            </select>
-            
+            <Select value={filterSource} onValueChange={setFilterSource}>
+              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom" align="start">
+                <SelectItem value="all">All Sources</SelectItem>
+                {Object.entries(SOURCE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v as string}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom" align="start">
+                <SelectItem value="all">All Stages</SelectItem>
+                {pipelineStages.map((s: any) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterDuplicate} onValueChange={setFilterDuplicate}>
+              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom" align="start">
+                <SelectItem value="all">All Records</SelectItem>
+                <SelectItem value="unique">Unique Only</SelectItem>
+                <SelectItem value="duplicate">Duplicates Only</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterZone} onValueChange={setFilterZone}>
+              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom" align="start">
+                <SelectItem value="all">All Zones</SelectItem>
+                {officeZones?.map(z => <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
             {/* Date + Sort mode */}
-            <select value={filterDateMode} onChange={e => {
-              setFilterDateMode(e.target.value as any);
-              setFilterDate('');
-              setFilterMonth('');
-            }} className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none">
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="date">By Date</option>
-              <option value="month">By Month</option>
-            </select>
+            <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); }}>
+              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="bottom" align="start">
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
+                <SelectItem value="date">By Date</SelectItem>
+                <SelectItem value="month">By Month</SelectItem>
+              </SelectContent>
+            </Select>
             
             {/* Date input - appears when "By Date" is selected */}
             {filterDateMode === 'date' && (
@@ -373,7 +419,7 @@ const Leads = () => {
           </Select>
           <Select onValueChange={handleBulkStatus}>
             <SelectTrigger className="h-7 w-[140px] text-2xs rounded-lg"><SelectValue placeholder="Change status..." /></SelectTrigger>
-            <SelectContent>{PIPELINE_STAGES.map(s => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}</SelectContent>
+            <SelectContent>{pipelineStages.map((s: any) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}</SelectContent>
           </Select>
           <Button variant="destructive" size="sm" className="h-7 text-2xs gap-1 rounded-lg" onClick={handleBulkDelete}>
             <Trash2 size={10} /> Delete
@@ -456,7 +502,7 @@ const Leads = () => {
                     {m.moveInParsed && <UrgencyBadge urgency={m.moveInParsed.urgency} label={m.moveInParsed.label} />}
                     {/* Status + Member at the end */}
                     <span className="lead-badge" style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, background: sBadge.bg, color: sBadge.color, border: `1px solid ${sBadge.border}`, fontWeight: 600 }}>
-                      {PIPELINE_STAGES.find(s => s.key === lead.status)?.label || lead.status}
+                      {pipelineStages.find((s: any) => s.key === lead.status)?.label || lead.status}
                     </span>
                     {lead.members?.name && (
                       <div className="lead-badge" style={{ height: 'max-content', display: 'flex', alignItems: 'center', gap: 4, background: T.bg2, border: `1px solid ${T.line}`, padding: '1px 3px 1px 6px', borderRadius: 5 }}>
@@ -588,7 +634,7 @@ const Leads = () => {
                   <div onClick={e => e.stopPropagation()} style={{ background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
                     <div style={{ fontSize: 8.5, color: T.dim, textTransform: 'uppercase' as const, letterSpacing: '0.07em', fontWeight: 700, marginBottom: 7 }}>Status</div>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {PIPELINE_STAGES.map(s => {
+                      {pipelineStages.map((s: any) => {
                         const sc = statusBadgeConfig[s.key] || statusBadgeConfig.new;
                         return (
                           <button key={s.key}

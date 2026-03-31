@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Loader2, Phone, Mail, MapPin, IndianRupee, User, StickyNote, Sparkles, PenLine, CalendarDays, Briefcase, Home, Users } from 'lucide-react';
-import { useCreateLead, useAgents, useOfficeZones } from '@/hooks/useCrmData';
-import { SOURCE_LABELS } from '@/types/crm';
+import { useCreateLead, useAgents, useOfficeZones, usePipelineStages } from '@/hooks/useCrmData';
+import { SOURCE_LABELS, PIPELINE_STAGES } from '@/types/crm';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parseLeadText, type ParsedLead } from '@/lib/parseLeadText';
@@ -30,19 +30,23 @@ const QuickAddLead = () => {
     name: '', phone: '', email: '', source: 'whatsapp' as string,
     budget: '', preferred_location: '', move_in_date: '', profession: '',
     room_type: '', need_preference: '', special_requests: '',
-    notes: '', assigned_member_id: '', zone: '',
+    notes: '', assigned_member_id: '', zone: '', lead_stage: 'new',
   });
   const [duplicate, setDuplicate] = useState<{ isDuplicate: boolean; duplicateCount: number; id: string; name: string; status: string } | null>(null);
 
   const createLead = useCreateLead();
   const { data: members } = useAgents();
   const { data: officeZones } = useOfficeZones();
+  const { data: pipelineStagesData } = usePipelineStages();
+  const pipelineStages = (pipelineStagesData && pipelineStagesData.length > 0)
+    ? pipelineStagesData
+    : PIPELINE_STAGES.map((s, i) => ({ ...s, order: i }));
 
   const reset = () => {
     setForm({
       name: '', phone: '', email: '', source: 'whatsapp', budget: '', preferred_location: '',
       move_in_date: '', profession: '', room_type: '', need_preference: '', special_requests: '',
-      notes: '', assigned_member_id: '', zone: ''
+      notes: '', assigned_member_id: '', zone: '', lead_stage: 'new',
     });
     setDuplicate(null);
     setRawText('');
@@ -120,7 +124,7 @@ const QuickAddLead = () => {
         specialRequests: (mode === 'smart' ? (parsed?.special_requests || form.special_requests) : form.special_requests).trim() || null,
         notes: (mode === 'smart' ? (parsed?.notes || form.notes) : form.notes).trim() || null,
         assignedMemberId: getAutoAgent(),
-        status: 'new',
+        status: form.lead_stage || 'new',
       });
       toast.success('Lead created!');
       setOpen(false);
@@ -281,6 +285,19 @@ const QuickAddLead = () => {
                     </div>
                   </div>
 
+                  {/* Lead Stage */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Lead Stage</Label>
+                    <Select value={form.lead_stage} onValueChange={v => setForm(f => ({ ...f, lead_stage: v }))}>
+                      <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {pipelineStages.map((s: any) => (
+                          <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="space-y-1">
                     <Label className="text-xs">Zone *</Label>
                     <div className="flex flex-wrap gap-2">
@@ -418,6 +435,19 @@ const QuickAddLead = () => {
                       <Label className="text-xs">Notes</Label>
                       <Input placeholder="Quick notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="h-10 rounded-xl" />
                     </div>
+                  </div>
+
+                  {/* Lead Stage */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Lead Stage</Label>
+                    <Select value={form.lead_stage} onValueChange={v => setForm(f => ({ ...f, lead_stage: v }))}>
+                      <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {pipelineStages.map((s: any) => (
+                          <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-1">

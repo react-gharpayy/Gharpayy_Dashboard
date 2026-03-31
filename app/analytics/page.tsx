@@ -1,7 +1,7 @@
 "use client";
 
 import AppLayout from '@/components/AppLayout';
-import { useAgentStats, useLeads, useVisits } from '@/hooks/useCrmData';
+import { useAgentStats, useLeads, useVisits, usePipelineStages } from '@/hooks/useCrmData';
 import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,6 +12,10 @@ const Analytics = () => {
   const { data: agentStats, isLoading: agentsLoading } = useAgentStats();
   const { data: leads, isLoading: leadsLoading } = useLeads();
   const { data: visits } = useVisits();
+  const { data: pipelineStagesData } = usePipelineStages();
+  const pipelineStages = (pipelineStagesData && pipelineStagesData.length > 0)
+    ? pipelineStagesData
+    : PIPELINE_STAGES.map((s, i) => ({ ...s, order: i }));
 
   if (agentsLoading || leadsLoading) {
     return (
@@ -24,7 +28,7 @@ const Analytics = () => {
   }
 
   // 1. Conversion Funnel
-  const funnelData = PIPELINE_STAGES.filter(s => s.key !== 'lost').map((stage, i, arr) => {
+  const funnelData = pipelineStages.filter((s: any) => s.key !== 'lost').map((stage: any, i: number, arr: any[]) => {
     const count = leads?.filter(l => l.status === stage.key).length || 0;
     const prevCount = i > 0 ? (leads?.filter(l => l.status === arr[i - 1].key).length || 0) : count;
     const dropOff = i > 0 && prevCount > 0 ? Math.round(((prevCount - count) / prevCount) * 100) : 0;

@@ -30,17 +30,20 @@ export type LeadWithRelations = {
   lastActivityAt: string;
 };
 
+export type LeaderboardPeriod = 'this_month' | 'all_time' | 'today' | 'last_30_days' | 'custom';
+
 export type CreatorLeaderboardEntry = {
   rank: number;
   userId: string;
   name: string;
   role: 'manager' | 'admin' | 'member';
+  score: number;
   leadsCreated: number;
   zones: { zone: string; count: number }[];
 };
 
 export type CreatorLeaderboardResponse = {
-  period: 'this_month' | 'all_time' | 'today' | 'last_30_days';
+  period: LeaderboardPeriod;
   from: string | null;
   to: string | null;
   generatedAt: string;
@@ -269,11 +272,20 @@ export const useDashboardStats = () =>
     },
   });
 
-export const useCreatorLeaderboard = (period: 'this_month' | 'all_time' | 'today' | 'last_30_days' = 'this_month') =>
+export const useCreatorLeaderboard = (
+  period: LeaderboardPeriod = 'this_month',
+  zone?: string,
+  customRange?: { from: string; to: string }
+) =>
   useQuery({
-    queryKey: ['creator-leaderboard', period],
+    queryKey: ['creator-leaderboard', period, zone, customRange],
     queryFn: async () => {
-      const res = await fetch(`/api/leads/stats/by-creator?period=${period}`);
+      let url = `/api/leads/stats/by-creator?period=${period}`;
+      if (zone && zone !== 'all') url += `&zone=${encodeURIComponent(zone)}`;
+      if (period === 'custom' && customRange?.from && customRange?.to) {
+        url += `&from=${customRange.from}&to=${customRange.to}`;
+      }
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch leaderboard');
       return res.json() as Promise<CreatorLeaderboardResponse>;
     },

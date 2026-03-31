@@ -3,7 +3,8 @@ import { useState, useCallback, useEffect, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
-import { useCreateLead, useAgents, useOfficeZones, useUpdateLead, type LeadWithRelations } from '@/hooks/useCrmData';
+import { useCreateLead, useAgents, useOfficeZones, useUpdateLead, usePipelineStages, type LeadWithRelations } from '@/hooks/useCrmData';
+import { PIPELINE_STAGES } from '@/types/crm';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { T, QUALITY, GEO_TECH_PARKS, FDISPLAY, buildKnowledgeSnapshot, tsNow, AREAS, haversine, roadDist, driveMin, nearestMetro, nearestTechParks, enrichLeadGeo, LINE_COLOR, TIER_COLOR } from '@/lib/leadGeoData';
@@ -172,6 +173,10 @@ const AddLeadDialog = ({ trigger, open: controlledOpen, onOpenChange, editingLea
   const updateLead = useUpdateLead();
   const { data: members } = useAgents();
   const { data: officeZones } = useOfficeZones();
+  const { data: pipelineStagesData } = usePipelineStages();
+  const pipelineStages = (pipelineStagesData && pipelineStagesData.length > 0)
+    ? pipelineStagesData
+    : PIPELINE_STAGES.map((s, i) => ({ ...s, order: i }));
 
   // Single lead state
   const [mode, setMode] = useState<"single" | "bulk">("single");
@@ -189,6 +194,7 @@ const AddLeadDialog = ({ trigger, open: controlledOpen, onOpenChange, editingLea
 
   const [showMatcher, setShowMatcher] = useState(false);
   const [assignedMemberId, setAssignedAgentId] = useState(user?.role === 'member' ? user.id : 'unassigned');
+  const [leadStage, setLeadStage] = useState('new');
 
   useEffect(() => {
     if (user?.role === 'member' && assignedMemberId === 'unassigned') {
@@ -248,6 +254,7 @@ const AddLeadDialog = ({ trigger, open: controlledOpen, onOpenChange, editingLea
       notes: notesList,
     });
     setAssignedAgentId(editingLead.assignedMemberId || 'unassigned');
+    setLeadStage(editingLead.status || 'new');
   }, [isEditMode, editingLead, open]);
 
   const onTextChange = (v: string) => {
@@ -318,18 +325,19 @@ const AddLeadDialog = ({ trigger, open: controlledOpen, onOpenChange, editingLea
         await updateLead.mutateAsync({
           id: editingLead.id,
           ...payload,
-          status: editingLead.status,
+          status: leadStage || editingLead.status,
         });
         toast.success("Lead updated successfully");
         setOpen(false);
         return;
       }
 
-      await createLead.mutateAsync({ ...payload, status: 'new' });
+      await createLead.mutateAsync({ ...payload, status: leadStage || 'new' });
       const sl: SessionLead = { id: Date.now(), addedAt: tsNow(), ...edited, zone, zones, techParks, quality, moveInParsed, rawText };
       setSessionLeads(prev => [sl, ...prev]);
       setRawText(""); setParsed(null); setEdited(null); 
       setAssignedAgentId(user?.role === 'member' ? user.id : 'unassigned');
+      setLeadStage('new');
       toast.success("✓ Lead saved to database!");
     } catch (err: any) { toast.error(err.message || (isEditMode ? "Failed to update lead" : "Failed to create lead")); }
   };
@@ -500,6 +508,15 @@ const AddLeadDialog = ({ trigger, open: controlledOpen, onOpenChange, editingLea
                         </select>
                       </div>
                     )}
+                    <div style={{ background: T.bg1, border: `1px solid ${T.line}`, borderRadius: 7, padding: "9px 11px" }}>
+                      <div style={{ fontSize: 9, color: T.dim, textTransform: "uppercase" as const, letterSpacing: "0.07em", fontWeight: 700, marginBottom: 7 }}>Lead Stage</div>
+                      <select value={leadStage} onChange={e => setLeadStage(e.target.value)}
+                        style={{ width: "100%", background: T.bg0, border: `1px solid ${T.line2}`, borderRadius: 7, padding: "7px 10px", fontSize: 11, color: T.text, outline: "none" }}>
+                        {pipelineStages.map((s: any) => (
+                          <option key={s.key} value={s.key}>{s.label}</option>
+                        ))}
+                      </select>
+                    </div>
                     <div style={{ background: T.bg1, border: `1px solid ${T.line}`, borderRadius: 7, padding: "9px 11px" }}>
                       <NotesBox notes={edited.notes || []} onAdd={n => setEdited({ ...edited, notes: [...(edited.notes || []), n] })} onDelete={i => setEdited({ ...edited, notes: (edited.notes || []).filter((_: any, j: number) => j !== i) })} />
                     </div>

@@ -9,10 +9,10 @@ import { Label } from '@/components/ui/label';
 import { useAgents } from '@/hooks/useCrmData';
 import { useAuth } from '@/contexts/AuthContext';
 import { SuperAdminSettingsPanel } from '@/components/SuperAdminSettingsPanel';
-import { CreatorLeaderboardPanel } from '@/components/CreatorLeaderboardPanel';
+
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { KeyRound, UserCog, User, Save, Trophy } from 'lucide-react';
+import { KeyRound, UserCog, User, Save } from 'lucide-react';
 
 const SettingsPage = () => {
   const { user } = useAuth();
@@ -58,7 +58,7 @@ const SettingsPage = () => {
               <TabsTrigger value="team" className="shrink-0 text-[11px] sm:text-xs px-2.5 sm:px-3 gap-1.5 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary border bg-background"><UserCog size={13} /> Team</TabsTrigger>
             )}
             <TabsTrigger value="profile" className="shrink-0 text-[11px] sm:text-xs px-2.5 sm:px-3 gap-1.5 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary border bg-background"><User size={13} /> Profile</TabsTrigger>
-            <TabsTrigger value="leaderboard" className="shrink-0 text-[11px] sm:text-xs px-2.5 sm:px-3 gap-1.5 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary border bg-background"><Trophy size={13} /> Leaderboard</TabsTrigger>
+
           </TabsList>
 
           {!isManager && !isAdmin && !isMember && (
@@ -76,9 +76,7 @@ const SettingsPage = () => {
               <AdminsTab />
             </TabsContent>
           )}
-          <TabsContent value="leaderboard">
-            <CreatorLeaderboardPanel />
-          </TabsContent>
+
           <TabsContent value="profile">
             <ProfileTab user={user || {}} />
           </TabsContent>

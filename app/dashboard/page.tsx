@@ -3,10 +3,10 @@
 import AppLayout from '@/components/AppLayout';
 import KpiCard from '@/components/KpiCard';
 import OnboardingCard from '@/components/OnboardingCard';
-import { useDashboardStats, useLeads, useAgentStats } from '@/hooks/useCrmData';
+import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
+import { useDashboardStats, useLeads, useAgentStats, usePipelineStages } from '@/hooks/useCrmData';
 import { useAllReminders, useCompleteFollowUp } from '@/hooks/useLeadDetails';
 import { useBookingStats } from '@/hooks/useBookings';
-import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
 import { Users, Clock, CalendarCheck, CheckCircle, TrendingUp, AlertTriangle, Timer, Star, IndianRupee } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,6 +35,10 @@ const Dashboard = () => {
   const { data: reminders } = useAllReminders();
   const completeFollowUp = useCompleteFollowUp();
   const qc = useQueryClient();
+  const { data: pipelineStagesData } = usePipelineStages();
+  const pipelineStages = (pipelineStagesData && pipelineStagesData.length > 0)
+    ? pipelineStagesData
+    : PIPELINE_STAGES.map((s, i) => ({ ...s, order: i }));
 
   // Realtime subscription removed - will be replaced with polling or typical SWR later
   useEffect(() => {
@@ -42,7 +46,7 @@ const Dashboard = () => {
     // For now, we will rely on manual invalidation or react-query polling.
   }, [qc]);
 
-  const pipelineData = PIPELINE_STAGES.map(stage => ({
+  const pipelineData = pipelineStages.map((stage: any) => ({
     name: stage.label.split(' ')[0],
     count: leads?.filter(l => l.status === stage.key).length || 0,
   }));
