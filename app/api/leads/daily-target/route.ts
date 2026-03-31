@@ -12,11 +12,14 @@ export async function GET() {
 
     await connectToDatabase();
 
-    // Today's date range (midnight to midnight)
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    // Today's date range (IST midnight to midnight)
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(now.getTime() + istOffset);
+    istTime.setUTCHours(0, 0, 0, 0);
+    const todayStart = new Date(istTime.getTime() - istOffset);
+    istTime.setUTCHours(23, 59, 59, 999);
+    const todayEnd = new Date(istTime.getTime() - istOffset);
 
     // Get pipeline stages sorted by order to find the 4th stage
     const stages = await PipelineStage.find({}).sort({ order: 1 }).lean();
