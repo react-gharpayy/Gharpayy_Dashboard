@@ -130,18 +130,35 @@ export function NotesBox({ notes = [], onAdd, onDelete, compact }: { notes: any[
 export function GeoIntelPanel({ lead }: { lead: any }) {
   const { areaIntel, matchedPark } = enrichLeadGeo(lead);
   if (!areaIntel.length && !matchedPark) return null;
+  
+  const D = {
+    gold: '#c4880d',
+    goldDim: 'rgba(196,136,13,0.10)',
+    bg1: '#f8f9fc',
+    bg2: '#f1f3f8',
+    hi: '#1a1e30',
+    text: '#2d3248',
+    mid: '#636b83',
+    dim: '#8c92a8',
+    acc: '#6c5ce7',
+    line: '#e2e5ee',
+    line2: '#d4d8e3',
+    mono: "'DM Mono','IBM Plex Mono',monospace",
+    sans: "'DM Sans',sans-serif"
+  };
+
   return (
     <div style={{ marginTop: 10, background: "rgba(196,136,13,0.05)", border: "1px solid rgba(196,136,13,0.18)", borderRadius: 9, padding: "11px 13px" }}>
-      <div style={{ fontSize: 9.5, color: T.gold, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.09em", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ fontSize: 9.5, color: D.gold, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.09em", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
         ⌖ Geo Intelligence
-        <span style={{ fontSize: 9, color: T.dim, fontWeight: 400, textTransform: "none" as const }}>coordinate-precise proximity data</span>
+        <span style={{ fontSize: 9, color: D.dim, fontWeight: 400, textTransform: "none" as const }}>coordinate-precise proximity data</span>
       </div>
       {matchedPark && (
         <div style={{ background: "rgba(196,136,13,0.06)", border: "1px solid rgba(196,136,13,0.2)", borderRadius: 7, padding: "8px 10px", marginBottom: 10 }}>
-          <div style={{ fontSize: 9, color: T.gold, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: 4 }}>🏢 Office / Tech Park Detected</div>
-          <div style={{ fontSize: 12.5, color: T.hi, fontWeight: 600 }}>{matchedPark.name}</div>
-          <div style={{ fontSize: 10.5, color: T.mid, marginTop: 2 }}>{matchedPark.area}</div>
-          <div style={{ fontSize: 10, color: T.dim, marginTop: 2 }}>{matchedPark.companies}</div>
+          <div style={{ fontSize: 9, color: D.gold, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: 4 }}>🏢 Office / Tech Park Detected</div>
+          <div style={{ fontSize: 12.5, color: D.hi, fontWeight: 600 }}>{matchedPark.name}</div>
+          <div style={{ fontSize: 10.5, color: D.mid, marginTop: 2 }}>{matchedPark.area}</div>
+          <div style={{ fontSize: 10, color: D.dim, marginTop: 2 }}>{matchedPark.companies}</div>
         </div>
       )}
       {areaIntel.map((area, idx) => {
@@ -150,35 +167,35 @@ export function GeoIntelPanel({ lead }: { lead: any }) {
           <div key={area.id} style={{ marginBottom: idx < areaIntel.length - 1 ? 12 : 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <TierBadge tier={area.tier} />
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: T.hi }}>{area.name}</span>
-              <span style={{ fontSize: 10, color: T.dim }}>PIN {area.pincode}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: D.hi }}>{area.name}</span>
+              <span style={{ fontSize: 10, color: D.dim }}>PIN {area.pincode}</span>
               {officeDistances[0] && (
                 <div style={{ marginLeft: "auto", textAlign: "right" as const }}>
                   <span style={{ fontSize: 11, color: "#34d399", fontWeight: 700 }}>{officeDistances[0].dist} km</span>
-                  <span style={{ fontSize: 9.5, color: T.dim, marginLeft: 5 }}>≈ {driveMin(officeDistances[0].road)} to office</span>
+                  <span style={{ fontSize: 9.5, color: D.dim, marginLeft: 5 }}>≈ {driveMin(officeDistances[0].road)} to office</span>
                 </div>
               )}
             </div>
-            <div style={{ fontSize: 10.5, color: T.mid, marginBottom: 8, lineHeight: 1.5 }}>{area.desc}</div>
+            <div style={{ fontSize: 10.5, color: D.mid, marginBottom: 8, lineHeight: 1.5 }}>{area.desc}</div>
             <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 8.5, color: T.dim, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" as const, marginBottom: 5 }}>Nearest Metro Stations</div>
+              <div style={{ fontSize: 8.5, color: D.dim, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" as const, marginBottom: 5 }}>Nearest Metro Stations</div>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                 {area.metros.map(m => (
-                  <div key={m.id} style={{ background: T.bg1, border: `1px solid ${LINE_COLOR[m.line] || "#444"}40`, borderRadius: 5, padding: "3px 8px", fontSize: 10, display: "flex", gap: 5, alignItems: "center" }}>
+                  <div key={m.id} style={{ background: D.bg1, border: `1px solid ${LINE_COLOR[m.line] || "#444"}40`, borderRadius: 5, padding: "3px 8px", fontSize: 10, display: "flex", gap: 5, alignItems: "center" }}>
                     <span style={{ color: LINE_COLOR[m.line] || "#999", fontWeight: 700, fontSize: 8.5 }}>{m.line.split("/")[0]}</span>
-                    <span style={{ color: T.text }}>{m.name}</span>
-                    <span style={{ color: T.dim }}>{m.dist.toFixed(1)}km</span>
+                    <span style={{ color: D.text }}>{m.name}</span>
+                    <span style={{ color: D.dim }}>{m.dist.toFixed(1)}km</span>
                   </div>
                 ))}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 8.5, color: T.dim, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" as const, marginBottom: 5 }}>Nearest Tech Parks</div>
+              <div style={{ fontSize: 8.5, color: D.dim, letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" as const, marginBottom: 5 }}>Nearest Tech Parks</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 {area.techParks.map(p => (
-                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: T.mid }}>
-                    <span style={{ color: p.id === matchedPark?.id ? "#d4a853" : T.text }}>{p.name} {p.id === matchedPark?.id && "★"}</span>
-                    <span style={{ color: T.dim, fontFamily: T.mono }}>{p.dist.toFixed(1)} km · {driveMin(roadDist(area.lat, area.lng, p.lat, p.lng))}</span>
+                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: D.mid }}>
+                    <span style={{ color: p.id === matchedPark?.id ? "#d4a853" : D.text }}>{p.name} {p.id === matchedPark?.id && "★"}</span>
+                    <span style={{ color: D.dim, fontFamily: D.mono }}>{p.dist.toFixed(1)} km · {driveMin(roadDist(area.lat, area.lng, p.lat, p.lng))}</span>
                   </div>
                 ))}
               </div>

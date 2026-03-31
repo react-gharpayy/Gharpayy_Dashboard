@@ -20,6 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -212,6 +213,7 @@ const Leads = () => {
     a.download = 'leads-export.csv';
     a.click();
   };
+
 
   if (isLoading) {
     return (
@@ -434,7 +436,7 @@ const Leads = () => {
       <style>{`
         @media (max-width: 640px) {
           .lead-avatar { display: none !important; }
-          .lead-card { padding: 8px 8px 8px 10px !important; border-radius: 9px !important; }
+          .lead-card { padding: 6px 8px 6px 10px !important; border-radius: 9px !important; }
           .lead-card-inner { gap: 5px !important; padding-left: 3px !important; }
           .lead-right { min-width: auto !important; gap: 3px !important; }
           .lead-expand-grid { grid-template-columns: 1fr 1fr !important; }
@@ -463,27 +465,27 @@ const Leads = () => {
               className="lead-card"
               style={{
                 background: T.bg1, border: `1px solid ${exp ? T.line2 : T.line}`,
-                borderRadius: 12, padding: '13px 15px', cursor: 'pointer',
+                borderRadius: 12, padding: '8px 12px', cursor: 'pointer',
                 position: 'relative', overflow: 'hidden', transition: 'all 0.15s',
               }}
             >
               {/* Left stripe */}
               <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: sBadge.color, borderRadius: '12px 0 0 12px', opacity: 0.7 }} />
 
-              <div className="lead-card-inner" style={{ display: 'flex', alignItems: 'flex-start', gap: 11, paddingLeft: 8 }}>
+              <div className="lead-card-inner" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 6 }}>
                 {/* Checkbox */}
                 {canManageLeadAssignments && (
-                  <div onClick={e => e.stopPropagation()} style={{ paddingTop: 5, flexShrink: 0 }}>
+                  <div onClick={e => e.stopPropagation()} style={{ paddingTop: 3, flexShrink: 0 }}>
                     <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleSelect(lead.id)} />
                   </div>
                 )}
 
                 {/* Avatar */}
                 <div className="lead-avatar" style={{
-                  width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                   background: `hsl(${hue},28%,92%)`, border: `2px solid hsl(${hue},32%,82%)`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 14, fontWeight: 800, color: `hsl(${hue},40%,42%)`,
+                  fontSize: 12, fontWeight: 800, color: `hsl(${hue},40%,42%)`,
                   fontFamily: T.sans,
                 }}>
                   {(lead.name || '?')[0]?.toUpperCase()}
@@ -491,182 +493,220 @@ const Leads = () => {
 
                 {/* Main content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* Row 1: Name + phone + key badges */}
-                  <div className="lead-row" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span className="lead-name" style={{ fontSize: 14, fontWeight: 700, color: T.hi, fontFamily: T.sans }}>{lead.name}</span>
-                    {lead.phone && <span className="lead-phone" style={{ fontFamily: T.mono, fontSize: 11, color: T.acc, fontWeight: 500 }}>{lead.phone}</span>}
-                    {lead.isDuplicate && <span className="lead-badge" style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(251,146,60,0.1)', color: '#ea580c', border: '1px solid rgba(251,146,60,0.3)', fontWeight: 600 }}>Duplicate</span>}
+                    {/* Row 1: Name, Phone, Badges */}
+                    <div className="lead-row" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span className="lead-name" style={{ fontSize: 14, fontWeight: 700, color: T.hi, fontFamily: T.sans }}>{lead.name}</span>
+                      {lead.phone && <span className="lead-phone" style={{ fontFamily: T.mono, fontSize: 11, color: T.acc, fontWeight: 500 }}>{lead.phone}</span>}
+                      {lead.isDuplicate && <span className="lead-badge" style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(251,146,60,0.1)', color: '#ea580c', border: '1px solid rgba(251,146,60,0.3)', fontWeight: 600 }}>Duplicate</span>}
+                      
+                      {/* Zone */}
+                      {m.zones.map((z: string) => <ZonePill key={z} zoneName={z} xs />)}
 
-                    {m.zones.map((z: string) => <ZonePill key={z} zoneName={z} xs />)}
-                    <SourceBadge source={m.source} />
-                    {m.moveInParsed && <UrgencyBadge urgency={m.moveInParsed.urgency} label={m.moveInParsed.label} />}
-                    {/* Status + Member at the end */}
-                    <span className="lead-badge" style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, background: sBadge.bg, color: sBadge.color, border: `1px solid ${sBadge.border}`, fontWeight: 600 }}>
-                      {pipelineStages.find((s: any) => s.key === lead.status)?.label || lead.status}
-                    </span>
-                    {lead.members?.name && (
-                      <div className="lead-badge" style={{ height: 'max-content', display: 'flex', alignItems: 'center', gap: 4, background: T.bg2, border: `1px solid ${T.line}`, padding: '1px 3px 1px 6px', borderRadius: 5 }}>
-                        <span style={{ fontSize: 11, color: T.hi, fontWeight: 600 }}>👤 {lead.members.name}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Row 2: Location + budget chips */}
-                  <div className="lead-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 5, alignItems: 'center' }}>
-                    {lead.preferredLocation && <span className="lead-info" style={{ fontSize: 11.5, color: T.mid }}>📍 {lead.preferredLocation.substring(0, 60)}</span>}
-                    {m.budgetRanges?.length > 0 ? (
-                      <BudgetChips ranges={m.budgetRanges} raw={lead.budget} />
-                    ) : (
-                      lead.budget && <span className="lead-info" style={{ fontSize: 11.5, color: T.mid }}>💰 {lead.budget}</span>
-                    )}
-                    {lead.moveInDate && <span className="lead-info" style={{ fontSize: 11.5, color: T.mid }}>📅 {lead.moveInDate}</span>}
-                  </div>
-
-                  {/* Row 3: Tech parks */}
-                  {m.techParks.length > 0 && (
-                    <div style={{ display: 'flex', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
-                      {m.techParks.map((tp: string) => <TechPill key={tp} name={tp} />)}
+                      {/* Status */}
+                      <span className="lead-badge" style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, background: sBadge.bg, color: sBadge.color, border: `1px solid ${sBadge.border}`, fontWeight: 600 }}>
+                        {pipelineStages.find((s: any) => s.key === lead.status)?.label || lead.status}
+                      </span>
+                      
+                      {/* Assigned Member */}
+                      {lead.members?.name && (
+                        <div className="lead-badge" style={{ height: 'max-content', display: 'flex', alignItems: 'center', gap: 4, background: T.bg2, border: `1px solid ${T.line}`, padding: '1px 3px 1px 6px', borderRadius: 5 }}>
+                          <span style={{ fontSize: 11, color: T.hi, fontWeight: 600 }}>👤 {lead.members.name}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
 
-                  {/* Row 4: Profession, room, need pills */}
-                  <div className="lead-row" style={{ display: 'flex', gap: 4, marginTop: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-                    {m.type && m.type !== 'U' && <Pill text={m.type} />}
-                    {m.room && m.room !== 'U' && <Pill text={m.room} />}
-                    {m.need && m.need.split(/\s*\/\s*/).filter(Boolean).map((n: string) => <Pill key={n} text={n.trim()} />)}
-                    {m.inBLR !== undefined && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 5, background: m.inBLR === null ? 'rgba(107,114,128,0.1)' : m.inBLR ? 'rgba(99,102,241,0.1)' : 'rgba(245,158,11,0.1)', color: m.inBLR === null ? '#9ca3af' : m.inBLR ? '#818cf8' : '#fbbf24', border: m.inBLR === null ? '1px solid rgba(107,114,128,0.2)' : m.inBLR ? '1px solid rgba(99,102,241,0.2)' : '1px solid rgba(245,158,11,0.2)', fontWeight: 600 }}>{m.inBLR === null ? '❓ Unknown' : (m.inBLR ? '🏙 In BLR' : '✈️ Out BLR')}</span>}
-                    {m.quality && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 5, background: 'rgba(234,179,8,0.1)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.2)', fontWeight: 600, textTransform: 'capitalize' }}>{m.quality}</span>}
+                    {/* Row 2: Details */}
+                    <div className="lead-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 5, alignItems: 'center' }}>
+                      {/* Move-in Date */}
+                      {lead.moveInDate && <span className="lead-info" style={{ fontSize: 11.5, color: T.mid }}>📅 {lead.moveInDate}</span>}
+                      
+                      {/* Budget */}
+                      {m.budgetRanges?.length > 0 ? (
+                        <BudgetChips ranges={m.budgetRanges} raw={lead.budget} />
+                      ) : (
+                        lead.budget && <span className="lead-info" style={{ fontSize: 11.5, color: T.mid }}>💰 {lead.budget}</span>
+                      )}
+
+                      {/* In BLR */}
+                      {m.inBLR !== undefined && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 5, background: m.inBLR === null ? 'rgba(107,114,128,0.1)' : m.inBLR ? 'rgba(99,102,241,0.1)' : 'rgba(245,158,11,0.1)', color: m.inBLR === null ? '#9ca3af' : m.inBLR ? '#818cf8' : '#fbbf24', border: m.inBLR === null ? '1px solid rgba(107,114,128,0.2)' : m.inBLR ? '1px solid rgba(99,102,241,0.2)' : '1px solid rgba(245,158,11,0.2)', fontWeight: 600 }}>{m.inBLR === null ? '❓ Unknown' : (m.inBLR ? '🏙 In BLR' : '✈️ Out BLR')}</span>}
+                      
+                      {/* Quality */}
+                      {m.quality && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 5, background: 'rgba(234,179,8,0.1)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.2)', fontWeight: 600, textTransform: 'capitalize' }}>{m.quality}</span>}
+                    </div>
                   </div>
 
-
-                </div>
-
-                {/* Right side: date + actions */}
-                <div className="lead-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                  <span style={{ fontSize: 9.5, fontWeight: 700, color: T.dim, fontFamily: T.mono, opacity: 0.8 }}>L-{lead.id.slice(-6).toUpperCase()}</span>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
-                    <span className="lead-date" style={{ fontSize: 9.5, color: T.dim, fontFamily: T.mono }}>{createdDate}</span>
-                    <span style={{ fontSize: 8.5, color: T.dim, fontFamily: T.mono, opacity: 0.8 }}>{createdTime}</span>
+                  {/* Right side: date + actions */}
+                  <div className="lead-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                      <span style={{ fontSize: 10, color: T.dim, fontFamily: T.mono }}>{createdDate}, {createdTime}</span>
+                      <span style={{ fontSize: 9.5, fontWeight: 700, color: T.dim, fontFamily: T.mono, opacity: 0.8 }}>
+                        L-{lead.id.slice(-6).toUpperCase()} {lead.creator?.name ? `• ${lead.creator.name}` : ''}
+                      </span>
+                    </div>
+                    
+                    <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
+                      <a href={`tel:${lead.phone}`} style={{ padding: 5, borderRadius: 6, background: T.bg2, border: `1px solid ${T.line}`, display: 'flex' }} title="Call">
+                        <PhoneCall size={12} color={T.mid} />
+                      </a>
+                      <a href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer"
+                        style={{ padding: 5, borderRadius: 6, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex' }} title="WhatsApp">
+                        <MessageCircle size={12} color="#22c55e" />
+                      </a>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button style={{ padding: 5, borderRadius: 6, background: T.bg2, border: `1px solid ${T.line}`, display: 'flex', cursor: 'pointer' }} title="More options">
+                            <MoreVertical size={12} color={T.mid} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => { setSelectedLeadForEdit(lead); setEditDialogOpen(true); }}>
+                            Edit Lead
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleDeleteLead(lead.id)} 
+                            className="text-destructive focus:text-destructive"
+                            style={{ cursor: 'pointer' }}
+                            onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'white'; }}
+                            onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#ef4444'; }}
+                          >
+                            Delete Lead
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                  {lead.creator?.name && <span style={{ fontSize: 8.5, color: T.dim, fontStyle: 'italic', letterSpacing: '0.04em', marginTop: -2, marginBottom: 2 }}>(Added by {lead.creator.name})</span>}
-                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
-                    <a href={`tel:${lead.phone}`} style={{ padding: 5, borderRadius: 6, background: T.bg2, border: `1px solid ${T.line}`, display: 'flex' }} title="Call">
-                      <PhoneCall size={12} color={T.mid} />
-                    </a>
-                    <a href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer"
-                      style={{ padding: 5, borderRadius: 6, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex' }} title="WhatsApp">
-                      <MessageCircle size={12} color="#22c55e" />
-                    </a>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button style={{ padding: 5, borderRadius: 6, background: T.bg2, border: `1px solid ${T.line}`, display: 'flex', cursor: 'pointer' }} title="More options">
-                          <MoreVertical size={12} color={T.mid} />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => { setSelectedLeadForEdit(lead); setEditDialogOpen(true); }}>
-                          Edit Lead
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => handleDeleteLead(lead.id)} 
-                          className="text-destructive focus:text-destructive"
-                          style={{ cursor: 'pointer' }}
-                          onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = 'white'; }}
-                          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.color = '#ef4444'; }}
-                        >
-                          Delete Lead
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
               </div>
 
               {/* ─── EXPANDED DETAIL ─── */}
-              {exp && (
-                <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.line}`, paddingLeft: 8 }}>
-                  {/* Info grid */}
-                  <div className="lead-expand-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 7, marginBottom: 12 }}>
-                    {[
-                      { label: 'Name', icon: '👤', value: lead.name },
-                      { label: 'Phone', icon: '📱', value: lead.phone },
-                      { label: 'Email', icon: '✉️', value: lead.email },
-                      { label: 'Location', icon: '📍', value: lead.preferredLocation },
-                      { label: 'Full Address', icon: '🏠', value: m.fullAddress },
-                      { label: 'Budget', icon: '💰', value: lead.budget },
-                      { label: 'Move-in', icon: '📅', value: lead.moveInDate },
-                      { label: 'Type', icon: '💼', value: m.type !== 'U' ? m.type : '' },
-                      { label: 'Room', icon: '🛏', value: m.room !== 'U' ? m.room : '' },
-                      { label: 'Need', icon: '👥', value: m.need },
-                      { label: 'Special Reqs', icon: '⭐', value: lead.specialRequests },
-                      { label: 'Member', icon: '🧑‍💼', value: lead.members?.name },
-                      { label: 'Score', icon: '⭐', value: lead.leadScore ? String(lead.leadScore) : '' },
-                      { label: 'Quality', icon: '🎯', value: m.quality },
-                      { label: 'In BLR?', icon: '🌆', value: m.inBLR !== undefined ? (m.inBLR === null ? 'Unknown' : (m.inBLR ? 'Yes' : 'No')) : '' },
-                      { label: 'Notes', icon: '📝', value: lead.notes },
-                    ].filter(f => f.value).map(f => (
-                      <div key={f.label} style={{ background: T.bg2, borderRadius: 8, padding: '8px 10px', border: `1px solid ${T.line}` }}>
-                        <div style={{ fontSize: 8.5, color: T.dim, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>{f.icon} {f.label}</div>
-                        <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.5, wordBreak: 'break-word' as const }}>{f.value}</div>
-                      </div>
-                    ))}
+              {exp && (() => {
+                const D = {
+                  bg1: '#f8f9fc',
+                  bg2: '#f1f3f8',
+                  bgRow: 'rgba(0,0,0,0.015)',
+                  bgLabel: 'rgba(0,0,0,0.03)',
+                  line: '#e2e5ee',
+                  line2: '#d4d8e3',
+                  hi: '#1a1e30',
+                  text: '#2d3248',
+                  mid: '#636b83',
+                  dim: '#8c92a8',
+                  acc: '#6c5ce7',
+                  accentBg: 'rgba(108,92,231,0.05)'
+                };
+                return (
+                <div className="light" style={{ padding: '16px 12px 12px 12px', borderTop: `1px solid ${D.line2}`, background: D.bgRow, borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
+                  {/* Pipeline Stepper */}
+                  <div style={{ marginBottom: 20, paddingTop: 4, paddingBottom: 10 }}>
+                    {(() => {
+                      const stagesToUse = (pipelineStages && pipelineStages.length > 0) ? pipelineStages : [{key: lead.status, label: lead.status}];
+                      const numStages = stagesToUse.length;
+                      const cIdx = stagesToUse.findIndex((s: any) => s.key === lead.status);
+                      const currentIdx = cIdx !== -1 ? cIdx : 0;
+                      
+                      return (
+                        <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', padding: '0 4px', paddingBottom: 4 }}>
+                          {stagesToUse.map((stage: any, i: number) => {
+                            const isCompleted = i < currentIdx;
+                            const isCurrent = i === currentIdx;
+                            const showLine = i < numStages - 1;
+                            const lineCompleted = i < currentIdx; 
+                            
+                            return (
+                              <div key={stage.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', flex: 1, minWidth: 0 }}>
+                                {/* Connecting Line */}
+                                {showLine && (
+                                  <div style={{ position: 'absolute', top: 11, left: '50%', right: '-50%', height: 2, background: lineCompleted ? D.acc : D.line2, zIndex: 0 }} />
+                                )}
+                                {/* Node Circle */}
+                                <div style={{
+                                  width: 24, height: 24, borderRadius: 12, zIndex: 1, position: 'relative',
+                                  background: isCompleted ? D.acc : isCurrent ? '#fff' : D.bg2,
+                                  border: `2px solid ${isCompleted || isCurrent ? D.acc : D.line2}`,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  boxShadow: isCurrent ? `0 0 0 4px rgba(108,92,231,0.12)` : 'none',
+                                  color: isCompleted ? '#fff' : isCurrent ? D.acc : D.mid,
+                                  transition: 'all 0.2s ease'
+                                }}>
+                                  {isCompleted ? (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                  ) : isCurrent ? (
+                                    <div style={{ width: 8, height: 8, borderRadius: 4, background: D.acc }} />
+                                  ) : null}
+                                </div>
+                                {/* Node Label */}
+                                <div style={{ 
+                                  marginTop: 10, fontSize: 10, fontWeight: isCurrent ? 800 : 600, 
+                                  color: isCurrent ? D.hi : isCompleted ? D.mid : D.dim,
+                                  textAlign: 'center', lineHeight: 1.25, width: '100%', padding: '0 2px',
+                                  overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
+                                }}>
+                                  {stage.label}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
 
-                  {/* Budget chips */}
-                  {m.budgetRanges?.length > 0 && (
-                    <div style={{ background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
-                      <div style={{ fontSize: 8.5, color: T.dim, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>💰 Budget Ranges</div>
-                      <BudgetChips ranges={m.budgetRanges} raw={lead.budget} />
-                    </div>
-                  )}
+                  {/* Unified Detail Grid */}
+                  {(() => {
+                    const allItems = [
+                      { label: 'Name', value: lead.name },
+                      { label: 'Phone', value: lead.phone },
+                      { label: 'Email', value: lead.email },
+                      { label: 'Location Pref', value: lead.preferredLocation },
+                      { label: 'Full Address', value: m.fullAddress },
+                      { label: 'Move-in Date', value: lead.moveInDate },
+                      { label: 'Property Type', value: m.type !== 'U' ? m.type : '' },
+                      { label: 'Configuration', value: m.room !== 'U' ? m.room : '' },
+                      { label: 'Tenant Need', value: m.need },
+                      { label: 'Budget', value: lead.budget },
+                      { label: 'Source', value: m.source },
+                      { label: 'Status', value: lead.status },
+                      { label: 'Quality', value: m.quality },
+                      { label: 'Lead Score', value: lead.leadScore ? String(lead.leadScore) : '' },
+                      { label: 'In BLR?', value: m.inBLR !== undefined ? (m.inBLR === null ? 'Unknown' : (m.inBLR ? 'Yes' : 'No')) : '' },
+                      { label: 'Assigned To', value: lead.members?.name },
+                      { label: 'Created By', value: lead.creator?.name },
+                      { label: 'Special Requests', value: lead.specialRequests },
+                      { label: 'Notes', value: lead.notes },
+                    ].filter(i => i.value);
+
+                    if (allItems.length === 0) return null;
+
+                    return (
+                      <div className="lead-tables-container" style={{ marginBottom: 16 }}>
+                        <div style={{ background: D.line, borderRadius: 10, border: `1px solid ${D.line}`, overflow: 'hidden' }}>
+                          <style>{`
+                            .table-vscroll::-webkit-scrollbar { width: 5px; }
+                            .table-vscroll::-webkit-scrollbar-track { background: transparent; }
+                            .table-vscroll::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.2); border-radius: 4px; }
+                          `}</style>
+                          <div className="table-vscroll" style={{ maxHeight: 250, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 1 }}>
+                            {allItems.map((item) => (
+                              <div key={item.label} style={{ display: 'flex', background: D.bg2, minHeight: 38 }}>
+                                <div style={{ width: '38%', minWidth: 110, padding: '8px 12px', fontSize: 11, color: D.dim, fontWeight: 700, letterSpacing: '0.02em', background: D.bgLabel, display: 'flex', alignItems: 'center' }}>
+                                  {item.label}
+                                </div>
+                                <div style={{ flex: 1, padding: '8px 12px', fontSize: 12, color: D.text, wordBreak: 'break-word', background: D.bg1, display: 'flex', alignItems: 'center' }}>
+                                  {item.value}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Multiple Areas */}
                   {m.areas.length > 1 && (
-                    <div style={{ background: 'rgba(108,92,231,0.05)', border: '1px solid rgba(108,92,231,0.15)', borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
-                      <div style={{ fontSize: 8.5, color: T.acc, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 5 }}>📍 Areas Detected</div>
+                    <div style={{ background: D.accentBg, border: `1px solid ${D.line}`, borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
+                      <div style={{ fontSize: 8.5, color: D.acc, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 5 }}>📍 Areas Detected</div>
                       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        {m.areas.map((a: string, i: number) => <span key={i} style={{ fontSize: 11, color: T.text, background: T.bg1, border: `1px solid ${T.line2}`, borderRadius: 5, padding: '2px 8px' }}>{a}</span>)}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Status changer */}
-                  <div onClick={e => e.stopPropagation()} style={{ background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
-                    <div style={{ fontSize: 8.5, color: T.dim, textTransform: 'uppercase' as const, letterSpacing: '0.07em', fontWeight: 700, marginBottom: 7 }}>Status</div>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {pipelineStages.map((s: any) => {
-                        const sc = statusBadgeConfig[s.key] || statusBadgeConfig.new;
-                        return (
-                          <button key={s.key}
-                            onClick={() => handleInlineStatus(lead.id, s.key)}
-                            style={{ fontSize: 10.5, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontWeight: lead.status === s.key ? 700 : 400, background: lead.status === s.key ? sc.bg : 'transparent', color: lead.status === s.key ? sc.color : T.dim, border: `1px solid ${lead.status === s.key ? sc.border : T.line}`, transition: 'all 0.12s' }}>
-                            {s.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Member reassignment */}
-                  {members && members.length > 0 && (
-                    <div onClick={e => e.stopPropagation()} style={{ background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
-                      <div style={{ fontSize: 8.5, color: T.dim, textTransform: 'uppercase' as const, letterSpacing: '0.07em', fontWeight: 700, marginBottom: 7 }}>Assigned Member</div>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        <button
-                          onClick={async () => { try { await updateLead.mutateAsync({ id: lead.id, assignedMemberId: null as any }); toast.success('Member unassigned'); } catch (err: any) { toast.error(err.message); } }}
-                          style={{ fontSize: 10.5, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontWeight: !lead.assignedMemberId ? 700 : 400, background: !lead.assignedMemberId ? 'rgba(100,116,139,0.1)' : 'transparent', color: !lead.assignedMemberId ? '#64748b' : T.dim, border: `1px solid ${!lead.assignedMemberId ? 'rgba(100,116,139,0.3)' : T.line}`, transition: 'all 0.12s' }}>
-                          Unassigned
-                        </button>
-                        {members.map((a: any) => {
-                          const isActive = String(lead.assignedMemberId) === String(a.id);
-                          return (
-                            <button key={a.id}
-                              onClick={async () => { try { await updateLead.mutateAsync({ id: lead.id, assignedMemberId: a.id }); toast.success(`Assigned to ${a.name}`); } catch (err: any) { toast.error(err.message); } }}
-                              style={{ fontSize: 10.5, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontWeight: isActive ? 700 : 400, background: isActive ? 'rgba(108,92,231,0.1)' : 'transparent', color: isActive ? T.acc : T.dim, border: `1px solid ${isActive ? 'rgba(108,92,231,0.3)' : T.line}`, transition: 'all 0.12s' }}>
-                              {a.name}
-                            </button>
-                          );
-                        })}
+                        {m.areas.map((a: string, i: number) => <span key={i} style={{ fontSize: 11, color: D.text, background: D.bg1, border: `1px solid ${D.line2}`, borderRadius: 5, padding: '2px 8px' }}>{a}</span>)}
                       </div>
                     </div>
                   )}
@@ -674,7 +714,8 @@ const Leads = () => {
                   {/* Geo Intelligence */}
                   <GeoIntelPanel lead={{ location: lead.preferredLocation, rawText: '', areas: m.areas }} />
                 </div>
-              )}
+              );
+            })()}
             </div>
           );
         })}
@@ -703,6 +744,7 @@ const Leads = () => {
           </div>
         </div>
       )}
+
 
       {/* Edit Lead Dialog */}
       <EditLeadDialog
