@@ -8,7 +8,7 @@ import { useLeadsPaginated, useOfficeZones, usePipelineStages } from '@/hooks/us
 import { useBulkUpdateLeads, useDeleteLeads } from '@/hooks/useLeadDetails';
 import { useUpdateLead, useAgents, type LeadWithRelations } from '@/hooks/useCrmData';
 import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
-import { Filter, Download, Trash2, PhoneCall, MessageCircle, MoreVertical } from 'lucide-react';
+import { Filter, Download, Trash2, PhoneCall, MessageCircle, MoreVertical, MapPin, ChevronDown, ChevronUp, Check } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,18 +20,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { T, QUALITY, GEO_TECH_PARKS, FDISPLAY } from '@/lib/leadGeoData';
 import { parseMoveInV2, parseBudgetV2 } from '@/lib/leadParserV2';
-import { Pill, ZonePill, TechPill, UrgencyBadge, SourceBadge, BLRBadge, BudgetChips, GeoIntelPanel } from '@/components/LeadUIAtoms';
+import { ZonePill, BudgetChips, GeoIntelPanel } from '@/components/LeadUIAtoms';
 
 // ─── helpers to map DB lead → card display ────────────────────────
 function mapLeadMeta(lead: LeadWithRelations) {
   const meta = lead.parsedMetadata || {} as any;
-  // Show ASSIGNED zone only
   const zone = (lead as any).zone || meta.zone || '';
   const zones = zone ? [zone] : [];
   const techParks: string[] = meta.techParks || [];
@@ -50,16 +48,51 @@ function mapLeadMeta(lead: LeadWithRelations) {
   return { zones, zone, techParks, moveInParsed, budgetRanges, areas, inBLR, source, type, room, need, buildingName, fullAddress, quality: meta.quality };
 }
 
+// ─── Quality badge colors ────────────────────────
+const getQualityBadgeColor = (quality: string) => {
+  switch (quality?.toLowerCase()) {
+    case 'hot': return { bg: '#d4a574', color: '#1a1a1a' };
+    case 'good':
+    case 'warm': return { bg: '#8b7d6b', color: '#ffffff' };
+    case 'bad':
+    case 'cold': return { bg: '#a97c7c', color: '#ffffff' };
+    default: return { bg: '#6b7280', color: '#ffffff' };
+  }
+};
+
+// ─── Progress bar color ────────────────────────
+const getProgressColor = (progress: number) => {
+  if (progress >= 70) return '#22c55e';
+  if (progress >= 50) return '#f97316';
+  return '#ef4444';
+};
+
+// ─── Status badge config ────────────────────────
 const statusBadgeConfig: Record<string, { bg: string; color: string; border: string }> = {
   new: { bg: 'rgba(96,165,250,0.1)', color: '#3b82f6', border: 'rgba(96,165,250,0.3)' },
   contacted: { bg: 'rgba(251,191,36,0.1)', color: '#d97706', border: 'rgba(251,191,36,0.3)' },
   qualified: { bg: 'rgba(52,211,153,0.1)', color: '#059669', border: 'rgba(52,211,153,0.3)' },
+  requirement_collected: { bg: 'rgba(52,211,153,0.1)', color: '#059669', border: 'rgba(52,211,153,0.3)' },
+  property_suggested: { bg: 'rgba(168,85,247,0.1)', color: '#9333ea', border: 'rgba(168,85,247,0.3)' },
   visit_scheduled: { bg: 'rgba(139,92,246,0.1)', color: '#7c3aed', border: 'rgba(139,92,246,0.3)' },
   visit_completed: { bg: 'rgba(168,85,247,0.1)', color: '#9333ea', border: 'rgba(168,85,247,0.3)' },
   negotiation: { bg: 'rgba(251,146,60,0.1)', color: '#ea580c', border: 'rgba(251,146,60,0.3)' },
   booked: { bg: 'rgba(34,197,94,0.1)', color: '#16a34a', border: 'rgba(34,197,94,0.3)' },
   lost: { bg: 'rgba(100,116,139,0.08)', color: '#64748b', border: 'rgba(100,116,139,0.25)' },
 };
+
+// ─── Compute a simple progress from lead fields ────────────────────────
+function computeLeadProgress(lead: LeadWithRelations) {
+  const fields = [lead.name, lead.phone, lead.email, lead.preferredLocation, lead.budget, lead.moveInDate, lead.profession, lead.roomType, lead.needPreference, lead.specialRequests];
+  const totalFields = fields.length;
+  const filled = fields.filter(Boolean).length;
+  return Math.round((filled / totalFields) * 100);
+}
+
+function computeFieldsMissing(lead: LeadWithRelations) {
+  const fields = [lead.name, lead.phone, lead.email, lead.preferredLocation, lead.budget, lead.moveInDate, lead.profession, lead.roomType, lead.needPreference, lead.specialRequests];
+  return fields.filter(f => !f).length;
+}
 
 const Leads = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,7 +107,6 @@ const Leads = () => {
   const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<LeadWithRelations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   
-  // Combined date/sort control
   const [filterDateMode, setFilterDateMode] = useState<'newest' | 'oldest' | 'date' | 'month'>('newest');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterMonth, setFilterMonth] = useState<string>('');
@@ -115,36 +147,19 @@ const Leads = () => {
       if (filterDuplicate === 'unique' && l.isDuplicate) return false;
       if (filterZone !== 'all' && (l as any).zone !== filterZone) return false;
       
-      // Date filter logic - only active for by-date / by-month modes
       if (filterDateMode === 'date' || filterDateMode === 'month') {
-        // If no moveInDate, exclude the lead
         if (!l.moveInDate) return false;
-        
         const parsed = parseMoveInV2(l.moveInDate);
-        // If moveInDate couldn't be parsed, exclude the lead
         if (!parsed || !parsed.resolved) return false;
-        
         const leadDate = parsed.resolved;
-        
         if (filterDateMode === 'date' && filterDate) {
-          // Filter by specific date
           const filterDateObj = new Date(filterDate);
-          if (
-            leadDate.getFullYear() !== filterDateObj.getFullYear() ||
-            leadDate.getMonth() !== filterDateObj.getMonth() ||
-            leadDate.getDate() !== filterDateObj.getDate()
-          ) {
-            return false;
-          }
+          if (leadDate.getFullYear() !== filterDateObj.getFullYear() || leadDate.getMonth() !== filterDateObj.getMonth() || leadDate.getDate() !== filterDateObj.getDate()) return false;
         } else if (filterDateMode === 'month' && filterMonth) {
-          // Filter by month and year
           const [year, month] = filterMonth.split('-').map(Number);
-          if (leadDate.getFullYear() !== year || leadDate.getMonth() + 1 !== month) {
-            return false;
-          }
+          if (leadDate.getFullYear() !== year || leadDate.getMonth() + 1 !== month) return false;
         }
       }
-      
       return true;
     })
     .sort((a, b) => {
@@ -186,21 +201,6 @@ const Leads = () => {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const handleDeleteLead = async (leadId: string) => {
-    if (!confirm('Delete this lead? This cannot be undone.')) return;
-    try {
-      await deleteLeads.mutateAsync([leadId]);
-      toast.success('Lead deleted');
-    } catch (err: any) { toast.error(err.message); }
-  };
-
-  const handleInlineStatus = async (leadId: string, newStatus: string) => {
-    try {
-      await updateLead.mutateAsync({ id: leadId, status: newStatus as any });
-      toast.success('Status updated');
-    } catch (err: any) { toast.error(err.message); }
-  };
-
   const handleExport = () => {
     const csv = [
       ['Name', 'Phone', 'Email', 'Source', 'Status', 'Member', 'Location', 'Budget', 'Score'].join(','),
@@ -213,7 +213,6 @@ const Leads = () => {
     a.download = 'leads-export.csv';
     a.click();
   };
-
 
   if (isLoading) {
     return (
@@ -280,7 +279,6 @@ const Leads = () => {
               </SelectContent>
             </Select>
 
-            {/* Date + Sort mode */}
             <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); }}>
               <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[110px] bg-card border-border">
                 <SelectValue />
@@ -293,7 +291,6 @@ const Leads = () => {
               </SelectContent>
             </Select>
             
-            {/* Date input - appears when "By Date" is selected */}
             {filterDateMode === 'date' && (
               <input 
                 type="date" 
@@ -303,7 +300,6 @@ const Leads = () => {
               />
             )}
             
-            {/* Month input - appears when "By Month" is selected */}
             {filterDateMode === 'month' && (
               <input 
                 type="month" 
@@ -312,7 +308,6 @@ const Leads = () => {
                 className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30"
               />
             )}
-            
           </div>
 
           <Button variant="outline" size="sm" className="mr-1.5 md:mr-0 h-[30px] md:h-8 gap-1.5 text-xs md:text-2xs rounded-lg md:rounded-xl px-3 ml-auto shrink-0" onClick={handleExport}>
@@ -330,27 +325,21 @@ const Leads = () => {
               className="h-8 text-xs rounded-lg w-full bg-card border-border"
             />
             <Select value={filterSource} onValueChange={setFilterSource}>
-              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="all">All Sources</SelectItem>
                 {Object.entries(SOURCE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v as string}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="all">All Stages</SelectItem>
                 {pipelineStages.map((s: any) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterDuplicate} onValueChange={setFilterDuplicate}>
-              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="all">All Records</SelectItem>
                 <SelectItem value="unique">Unique Only</SelectItem>
@@ -358,20 +347,14 @@ const Leads = () => {
               </SelectContent>
             </Select>
             <Select value={filterZone} onValueChange={setFilterZone}>
-              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="all">All Zones</SelectItem>
                 {officeZones?.map(z => <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>)}
               </SelectContent>
             </Select>
-
-            {/* Date + Sort mode */}
             <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); }}>
-              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="newest">Newest First</SelectItem>
                 <SelectItem value="oldest">Oldest First</SelectItem>
@@ -379,27 +362,14 @@ const Leads = () => {
                 <SelectItem value="month">By Month</SelectItem>
               </SelectContent>
             </Select>
-            
-            {/* Date input - appears when "By Date" is selected */}
             {filterDateMode === 'date' && (
-              <input 
-                type="date" 
-                value={filterDate}
-                onChange={e => setFilterDate(e.target.value)}
-                className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none"
-              />
+              <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+                className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none" />
             )}
-            
-            {/* Month input - appears when "By Month" is selected */}
             {filterDateMode === 'month' && (
-              <input 
-                type="month" 
-                value={filterMonth}
-                onChange={e => setFilterMonth(e.target.value)}
-                className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none"
-              />
+              <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+                className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none" />
             )}
-            
           </motion.div>
         )}
       </div>
@@ -432,289 +402,599 @@ const Leads = () => {
         </motion.div>
       )}
 
-      {/* Lead Cards */}
+      {/* ═══════════════════════════════════════════════════════════ */}
+      {/*  LEAD CARDS — NEW UI                                       */}
+      {/* ═══════════════════════════════════════════════════════════ */}
       <style>{`
+        :root {
+          --lc-bg0: #ffffff; --lc-bg1: #f8f9fc; --lc-bg2: #f1f3f8; --lc-bg3: #e8ebf2;
+          --lc-line: #e2e5ee; --lc-line2: #d4d8e3;
+          --lc-dim: #8c92a8; --lc-mid: #636b83; --lc-text: #2d3248; --lc-hi: #1a1e30;
+          --lc-acc: #6c5ce7; --lc-acc2: #4a90e2;
+          --lc-bgrow: rgba(0,0,0,0.015); --lc-bglabel: rgba(0,0,0,0.03);
+          --lc-accent-bg: rgba(108,92,231,0.05);
+          --lc-mono: 'DM Mono','IBM Plex Mono',monospace;
+          --lc-sans: 'DM Sans',sans-serif;
+        }
+        .dark {
+          --lc-bg0: #141419; --lc-bg1: #1c1c24; --lc-bg2: #24242e; --lc-bg3: #2e2e3a;
+          --lc-line: #2e2e3a; --lc-line2: #3a3a48;
+          --lc-dim: #6b6b80; --lc-mid: #9090a8; --lc-text: #c8c8d8; --lc-hi: #e8e8f0;
+          --lc-acc: #8b7cf8; --lc-acc2: #6aa0f2;
+          --lc-bgrow: rgba(255,255,255,0.02); --lc-bglabel: rgba(255,255,255,0.03);
+          --lc-accent-bg: rgba(139,124,248,0.08);
+        }
         @media (max-width: 640px) {
-          .lead-avatar { display: none !important; }
-          .lead-card { padding: 6px 8px 6px 10px !important; border-radius: 9px !important; }
-          .lead-card-inner { gap: 5px !important; padding-left: 3px !important; }
-          .lead-right { min-width: auto !important; gap: 3px !important; }
-          .lead-expand-grid { grid-template-columns: 1fr 1fr !important; }
-          .lead-card span, .lead-card div { font-size: inherit; }
-          .lead-card .lead-name { font-size: 12px !important; }
-          .lead-card .lead-phone { font-size: 9.5px !important; }
-          .lead-card .lead-row { gap: 4px !important; margin-top: 3px !important; }
-          .lead-card .lead-badge { font-size: 8.5px !important; padding: 1px 5px !important; }
-          .lead-card .lead-info { font-size: 10px !important; }
-          .lead-card .lead-pill { font-size: 9px !important; padding: 1px 5px !important; }
-          .lead-card .lead-date { font-size: 8px !important; }
+          .lc-avatar { display: none !important; }
+          .lc-card { padding: 8px 10px !important; }
+          .lc-expand-grid { grid-template-columns: 1fr 1fr !important; }
         }
       `}</style>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {filtered.map(lead => {
           const m = mapLeadMeta(lead);
-          const exp = expandedId === lead.id;
+          const isExpanded = expandedId === lead.id;
           const sBadge = statusBadgeConfig[lead.status] || statusBadgeConfig.new;
-          const createdDate = new Date(lead.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-          const createdTime = new Date(lead.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+          const stageLabel = pipelineStages.find((s: any) => s.key === lead.status)?.label || lead.status;
           const hue = lead.name ? lead.name.charCodeAt(0) * 7 % 360 : 200;
+          const progress = computeLeadProgress(lead);
+          const fieldsMissing = computeFieldsMissing(lead);
+          const progressColor = getProgressColor(progress);
+          const qualityBadge = getQualityBadgeColor(m.quality || '');
+          const createdDate = new Date(lead.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
-          return (
-            <div key={lead.id}
-              onClick={() => setExpandedId(exp ? null : lead.id)}
-              className="lead-card"
-              style={{
-                background: T.bg1, border: `1px solid ${exp ? T.line2 : T.line}`,
-                borderRadius: 12, padding: '8px 12px', cursor: 'pointer',
-                position: 'relative', overflow: 'hidden', transition: 'all 0.15s',
-              }}
-            >
-              {/* Left stripe */}
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: sBadge.color, borderRadius: '12px 0 0 12px', opacity: 0.7 }} />
+          // Budget display for collapsed card
+          const budgetDisplay = m.budgetRanges?.length > 0
+            ? m.budgetRanges.map((r: any) => r.display).join(', ')
+            : lead.budget || '';
 
-              <div className="lead-card-inner" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingLeft: 6 }}>
-                {/* Checkbox */}
-                {canManageLeadAssignments && (
-                  <div onClick={e => e.stopPropagation()} style={{ paddingTop: 3, flexShrink: 0 }}>
-                    <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleSelect(lead.id)} />
+          if (!isExpanded) {
+            // ─── COLLAPSED CARD ───
+            return (
+              <div
+                key={lead.id}
+                className="lc-card"
+                onClick={() => setExpandedId(lead.id)}
+                style={{
+                  background: 'var(--lc-bg1)',
+                  border: '1px solid var(--lc-line)',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  position: 'relative',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--lc-line2)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--lc-line)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  {/* Checkbox */}
+                  {canManageLeadAssignments && (
+                    <div onClick={e => e.stopPropagation()} style={{ paddingTop: 6, flexShrink: 0 }}>
+                      <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleSelect(lead.id)} />
+                    </div>
+                  )}
+
+                  {/* Avatar */}
+                  <div className="lc-avatar" style={{
+                    width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
+                    background: `hsl(${hue},30%,92%)`,
+                    border: `2px solid hsl(${hue},34%,84%)`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 16, fontWeight: 700, color: `hsl(${hue},38%,42%)`,
+                    fontFamily: 'var(--lc-sans)',
+                  }}>
+                    {(lead.name || '?')[0]?.toUpperCase()}
                   </div>
-                )}
 
-                {/* Avatar */}
-                <div className="lead-avatar" style={{
-                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                  background: `hsl(${hue},28%,92%)`, border: `2px solid hsl(${hue},32%,82%)`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, fontWeight: 800, color: `hsl(${hue},40%,42%)`,
-                  fontFamily: T.sans,
-                }}>
-                  {(lead.name || '?')[0]?.toUpperCase()}
-                </div>
-
-                {/* Main content */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Row 1: Name, Phone, Badges */}
-                    <div className="lead-row" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span className="lead-name" style={{ fontSize: 14, fontWeight: 700, color: T.hi, fontFamily: T.sans }}>{lead.name}</span>
-                      {lead.phone && <span className="lead-phone" style={{ fontFamily: T.mono, fontSize: 11, color: T.acc, fontWeight: 500 }}>{lead.phone}</span>}
-                      {lead.isDuplicate && <span className="lead-badge" style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(251,146,60,0.1)', color: '#ea580c', border: '1px solid rgba(251,146,60,0.3)', fontWeight: 600 }}>Duplicate</span>}
+                  {/* Lead Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Row 1: Name + Badges */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap', paddingBottom: 4 }}>
+                      <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--lc-hi)', margin: 0, fontFamily: 'var(--lc-sans)', paddingRight: 2 }}>{lead.name}</h3>
                       
-                      {/* Zone */}
+                      {m.need && (
+                        <>
+                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                          <span style={{ fontSize: 10.5, color: 'var(--lc-mid)', fontWeight: 600 }}>{m.need}</span>
+                        </>
+                      )}
+
+                      {m.quality && (
+                        <>
+                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                          <span style={{
+                            padding: '1px 8px', borderRadius: 10, fontSize: 9.5, fontWeight: 600,
+                            background: qualityBadge.bg, color: qualityBadge.color,
+                          }}>
+                            {m.quality.charAt(0).toUpperCase() + m.quality.slice(1)}
+                          </span>
+                        </>
+                      )}
+                      
+                      {m.zones.length > 0 && <span style={{ color: 'var(--lc-line2)' }}>|</span>}
                       {m.zones.map((z: string) => <ZonePill key={z} zoneName={z} xs />)}
 
-                      {/* Status */}
-                      <span className="lead-badge" style={{ fontSize: 10, padding: '2px 8px', borderRadius: 5, background: sBadge.bg, color: sBadge.color, border: `1px solid ${sBadge.border}`, fontWeight: 600 }}>
-                        {pipelineStages.find((s: any) => s.key === lead.status)?.label || lead.status}
+                      <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                      <span style={{
+                        padding: '1px 8px', borderRadius: 10, fontSize: 9.5, fontWeight: 600,
+                        background: sBadge.bg, color: sBadge.color, border: `1px solid ${sBadge.border}`,
+                      }}>
+                        {stageLabel}
                       </span>
-                      
-                      {/* Assigned Member */}
-                      {lead.members?.name && (
-                        <div className="lead-badge" style={{ height: 'max-content', display: 'flex', alignItems: 'center', gap: 4, background: T.bg2, border: `1px solid ${T.line}`, padding: '1px 3px 1px 6px', borderRadius: 5 }}>
-                          <span style={{ fontSize: 11, color: T.hi, fontWeight: 600 }}>👤 {lead.members.name}</span>
-                        </div>
-                      )}
                     </div>
 
-                    {/* Row 2: Details */}
-                    <div className="lead-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 5, alignItems: 'center' }}>
-                      {/* Move-in Date */}
-                      {lead.moveInDate && <span className="lead-info" style={{ fontSize: 11.5, color: T.mid }}>📅 {lead.moveInDate}</span>}
-                      
-                      {/* Budget */}
-                      {m.budgetRanges?.length > 0 ? (
-                        <BudgetChips ranges={m.budgetRanges} raw={lead.budget} />
-                      ) : (
-                        lead.budget && <span className="lead-info" style={{ fontSize: 11.5, color: T.mid }}>💰 {lead.budget}</span>
+                    {/* Row 2: Phone + Budget + Extended Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11.5, color: 'var(--lc-mid)', fontFamily: 'var(--lc-mono)', fontWeight: 600 }}>{lead.phone}</span>
+
+                      {budgetDisplay && (
+                        <>
+                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                          <span style={{
+                            fontSize: 10, padding: '1px 7px',
+                            background: 'var(--lc-bg2)', borderRadius: 4, color: 'var(--lc-mid)',
+                            fontFamily: 'var(--lc-mono)', fontWeight: 500,
+                          }}>
+                            {budgetDisplay}
+                          </span>
+                        </>
                       )}
 
-                      {/* In BLR */}
-                      {m.inBLR !== undefined && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 5, background: m.inBLR === null ? 'rgba(107,114,128,0.1)' : m.inBLR ? 'rgba(99,102,241,0.1)' : 'rgba(245,158,11,0.1)', color: m.inBLR === null ? '#9ca3af' : m.inBLR ? '#818cf8' : '#fbbf24', border: m.inBLR === null ? '1px solid rgba(107,114,128,0.2)' : m.inBLR ? '1px solid rgba(99,102,241,0.2)' : '1px solid rgba(245,158,11,0.2)', fontWeight: 600 }}>{m.inBLR === null ? '❓ Unknown' : (m.inBLR ? '🏙 In BLR' : '✈️ Out BLR')}</span>}
-                      
-                      {/* Quality */}
-                      {m.quality && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 5, background: 'rgba(234,179,8,0.1)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.2)', fontWeight: 600, textTransform: 'capitalize' }}>{m.quality}</span>}
+                      {m.inBLR !== null && (
+                        <>
+                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                          <span style={{ fontSize: 10, color: m.inBLR ? 'var(--lc-mid)' : 'var(--lc-dim)', fontWeight: 500 }}>
+                            {m.inBLR ? 'IN BLR' : 'NOT IN BLR'}
+                          </span>
+                        </>
+                      )}
+
+                      {lead.moveInDate && (
+                        <>
+                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                          <span style={{ fontSize: 10, color: 'var(--lc-mid)', fontWeight: 500 }}>
+                            {lead.moveInDate}
+                          </span>
+                        </>
+                      )}
+
+                      {lead.preferredLocation && (
+                        <>
+                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <MapPin size={9} color="var(--lc-dim)" />
+                            <span style={{ fontSize: 10, color: 'var(--lc-dim)', fontWeight: 500 }}>{lead.preferredLocation}</span>
+                          </div>
+                        </>
+                      )}
+
+                      {fieldsMissing > 0 && (
+                        <>
+                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                          <div style={{
+                            display: 'inline-block',
+                            padding: '1px 6px', borderRadius: 4,
+                            background: 'rgba(239,68,68,0.08)', color: '#ef4444',
+                            fontSize: 9.5, fontWeight: 600,
+                          }}>
+                            {fieldsMissing} missing
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  {/* Right side: date + actions */}
-                  <div className="lead-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                      <span style={{ fontSize: 10, color: T.dim, fontFamily: T.mono }}>{createdDate}, {createdTime}</span>
-                      <span style={{ fontSize: 9.5, fontWeight: 700, color: T.dim, fontFamily: T.mono, opacity: 0.8 }}>
-                        L-{lead.id.slice(-6).toUpperCase()} {lead.creator?.name ? `• ${lead.creator.name}` : ''}
-                      </span>
-                    </div>
+                  {/* Quick actions on collapsed */}
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2 }}>
                     
-                    <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
-                      <a href={`tel:${lead.phone}`} style={{ padding: 5, borderRadius: 6, background: T.bg2, border: `1px solid ${T.line}`, display: 'flex' }} title="Call">
-                        <PhoneCall size={12} color={T.mid} />
+                    {/* Small Progress Bar */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, width: '100%' }}>
+                      <div style={{ flex: 1, height: 4, background: 'var(--lc-bg3)', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${progress}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
+                      </div>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: progressColor, fontFamily: 'var(--lc-mono)', textAlign: 'right', minWidth: 20 }}>{progress}%</span>
+                    </div>
+
+                    {/* Action icons row */}
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setExpandedId(lead.id); }} 
+                        style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
+                        title="Expand"
+                      >
+                        <ChevronDown size={12} color="var(--lc-mid)" />
+                      </button>
+                      <a href={`tel:${lead.phone}`} style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex' }} title="Call">
+                        <PhoneCall size={12} color="var(--lc-mid)" />
                       </a>
-                      <a href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer"
-                        style={{ padding: 5, borderRadius: 6, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex' }} title="WhatsApp">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`); toast.success('WhatsApp link copied!'); }}
+                        style={{ padding: 5, borderRadius: 6, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }} 
+                        title="Copy WhatsApp API"
+                      >
                         <MessageCircle size={12} color="#22c55e" />
-                      </a>
+                      </button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button style={{ padding: 5, borderRadius: 6, background: T.bg2, border: `1px solid ${T.line}`, display: 'flex', cursor: 'pointer' }} title="More options">
-                            <MoreVertical size={12} color={T.mid} />
+                          <button style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} title="More options">
+                            <MoreVertical size={12} color="var(--lc-mid)" />
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => { setSelectedLeadForEdit(lead); setEditDialogOpen(true); }}>
                             Edit Lead
                           </DropdownMenuItem>
-
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
                   </div>
+                </div>
               </div>
+            );
+          }
 
-              {/* ─── EXPANDED DETAIL ─── */}
-              {exp && (() => {
-                const D = {
-                  bg1: '#f8f9fc',
-                  bg2: '#f1f3f8',
-                  bgRow: 'rgba(0,0,0,0.015)',
-                  bgLabel: 'rgba(0,0,0,0.03)',
-                  line: '#e2e5ee',
-                  line2: '#d4d8e3',
-                  hi: '#1a1e30',
-                  text: '#2d3248',
-                  mid: '#636b83',
-                  dim: '#8c92a8',
-                  acc: '#6c5ce7',
-                  accentBg: 'rgba(108,92,231,0.05)'
-                };
-                return (
-                <div className="light" style={{ padding: '16px 12px 12px 12px', borderTop: `1px solid ${D.line2}`, background: D.bgRow, borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
-                  {/* Pipeline Stepper */}
-                  <div style={{ marginBottom: 20, paddingTop: 4, paddingBottom: 10 }}>
-                    {(() => {
-                      const stagesToUse = (pipelineStages && pipelineStages.length > 0) ? pipelineStages : [{key: lead.status, label: lead.status}];
-                      const numStages = stagesToUse.length;
-                      const cIdx = stagesToUse.findIndex((s: any) => s.key === lead.status);
-                      const currentIdx = cIdx !== -1 ? cIdx : 0;
-                      
-                      return (
-                        <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', padding: '0 4px', paddingBottom: 4 }}>
-                          {stagesToUse.map((stage: any, i: number) => {
-                            const isCompleted = i < currentIdx;
-                            const isCurrent = i === currentIdx;
-                            const showLine = i < numStages - 1;
-                            const lineCompleted = i < currentIdx; 
-                            
-                            return (
-                              <div key={stage.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', flex: 1, minWidth: 0 }}>
-                                {/* Connecting Line */}
-                                {showLine && (
-                                  <div style={{ position: 'absolute', top: 11, left: '50%', right: '-50%', height: 2, background: lineCompleted ? D.acc : D.line2, zIndex: 0 }} />
-                                )}
-                                {/* Node Circle */}
-                                <div style={{
-                                  width: 24, height: 24, borderRadius: 12, zIndex: 1, position: 'relative',
-                                  background: isCompleted ? D.acc : isCurrent ? '#fff' : D.bg2,
-                                  border: `2px solid ${isCompleted || isCurrent ? D.acc : D.line2}`,
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  boxShadow: isCurrent ? `0 0 0 4px rgba(108,92,231,0.12)` : 'none',
-                                  color: isCompleted ? '#fff' : isCurrent ? D.acc : D.mid,
-                                  transition: 'all 0.2s ease'
-                                }}>
-                                  {isCompleted ? (
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                  ) : isCurrent ? (
-                                    <div style={{ width: 8, height: 8, borderRadius: 4, background: D.acc }} />
-                                  ) : null}
-                                </div>
-                                {/* Node Label */}
-                                <div style={{ 
-                                  marginTop: 10, fontSize: 10, fontWeight: isCurrent ? 800 : 600, 
-                                  color: isCurrent ? D.hi : isCompleted ? D.mid : D.dim,
-                                  textAlign: 'center', lineHeight: 1.25, width: '100%', padding: '0 2px',
-                                  overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
-                                }}>
-                                  {stage.label}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-                  </div>
+          // ─── EXPANDED CARD ───
+          const currentStageIndex = pipelineStages.findIndex((s: any) => s.key === lead.status);
+          const stageIdx = currentStageIndex !== -1 ? currentStageIndex : 0;
 
-                  {/* Unified Detail Grid */}
-                  {(() => {
-                    const allItems = [
-                      { label: 'Name', value: lead.name },
-                      { label: 'Phone', value: lead.phone },
-                      { label: 'Email', value: lead.email },
-                      { label: 'Location Pref', value: lead.preferredLocation },
-                      { label: 'Full Address', value: m.fullAddress },
-                      { label: 'Move-in Date', value: lead.moveInDate },
-                      { label: 'Property Type', value: m.type !== 'U' ? m.type : '' },
-                      { label: 'Configuration', value: m.room !== 'U' ? m.room : '' },
-                      { label: 'Tenant Need', value: m.need },
-                      { label: 'Budget', value: lead.budget },
-                      { label: 'Source', value: m.source },
-                      { label: 'Status', value: lead.status },
-                      { label: 'Quality', value: m.quality },
-                      { label: 'Lead Score', value: lead.leadScore ? String(lead.leadScore) : '' },
-                      { label: 'In BLR?', value: m.inBLR !== undefined ? (m.inBLR === null ? 'Unknown' : (m.inBLR ? 'Yes' : 'No')) : '' },
-                      { label: 'Assigned To', value: lead.members?.name },
-                      { label: 'Created By', value: lead.creator?.name },
-                      { label: 'Special Requests', value: lead.specialRequests },
-                      { label: 'Notes', value: lead.notes },
-                    ].filter(i => i.value);
+          // Theme object using CSS vars (respects dark mode)
+          const D = {
+            bg1: 'var(--lc-bg1)',
+            bg2: 'var(--lc-bg2)',
+            bgRow: 'var(--lc-bgrow)',
+            bgLabel: 'var(--lc-bglabel)',
+            line: 'var(--lc-line)',
+            line2: 'var(--lc-line2)',
+            hi: 'var(--lc-hi)',
+            text: 'var(--lc-text)',
+            mid: 'var(--lc-mid)',
+            dim: 'var(--lc-dim)',
+            acc: 'var(--lc-acc)',
+            accentBg: 'var(--lc-accent-bg)',
+          };
 
-                    if (allItems.length === 0) return null;
-
-                    return (
-                      <div className="lead-tables-container" style={{ marginBottom: 16 }}>
-                        <div style={{ background: D.line, borderRadius: 10, border: `1px solid ${D.line}`, overflow: 'hidden' }}>
-                          <style>{`
-                            .table-vscroll::-webkit-scrollbar { width: 5px; }
-                            .table-vscroll::-webkit-scrollbar-track { background: transparent; }
-                            .table-vscroll::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.2); border-radius: 4px; }
-                          `}</style>
-                          <div className="table-vscroll" style={{ maxHeight: 250, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 1 }}>
-                            {allItems.map((item) => (
-                              <div key={item.label} style={{ display: 'flex', background: D.bg2, minHeight: 38 }}>
-                                <div style={{ width: '38%', minWidth: 110, padding: '8px 12px', fontSize: 11, color: D.dim, fontWeight: 700, letterSpacing: '0.02em', background: D.bgLabel, display: 'flex', alignItems: 'center' }}>
-                                  {item.label}
-                                </div>
-                                <div style={{ flex: 1, padding: '8px 12px', fontSize: 12, color: D.text, wordBreak: 'break-word', background: D.bg1, display: 'flex', alignItems: 'center' }}>
-                                  {item.value}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+          return (
+            <motion.div
+              key={lead.id}
+              initial={{ opacity: 0.9 }}
+              animate={{ opacity: 1 }}
+              style={{
+                background: 'var(--lc-bg1)',
+                borderRadius: 14,
+                border: `2px solid var(--lc-acc)`,
+                overflow: 'hidden',
+              }}
+            >
+              {/* ─── Expanded Header ─── */}
+              <div style={{ padding: '14px 16px 10px', cursor: 'pointer' }} onClick={() => setExpandedId(null)}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1 }}>
+                    {/* Checkbox */}
+                    {canManageLeadAssignments && (
+                      <div onClick={e => e.stopPropagation()} style={{ paddingTop: 6, flexShrink: 0 }}>
+                        <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleSelect(lead.id)} />
                       </div>
-                    );
-                  })()}
+                    )}
 
-                  {/* Multiple Areas */}
-                  {m.areas.length > 1 && (
-                    <div style={{ background: D.accentBg, border: `1px solid ${D.line}`, borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
-                      <div style={{ fontSize: 8.5, color: D.acc, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 5 }}>📍 Areas Detected</div>
-                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        {m.areas.map((a: string, i: number) => <span key={i} style={{ fontSize: 11, color: D.text, background: D.bg1, border: `1px solid ${D.line2}`, borderRadius: 5, padding: '2px 8px' }}>{a}</span>)}
+                    {/* Avatar */}
+                    <div className="lc-avatar" style={{
+                      width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
+                      background: `hsl(${hue},30%,92%)`,
+                      border: `2px solid hsl(${hue},34%,84%)`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 16, fontWeight: 700, color: `hsl(${hue},38%,42%)`,
+                      fontFamily: 'var(--lc-sans)',
+                    }}>
+                      {(lead.name || '?')[0]?.toUpperCase()}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Row 1: Name + Badges */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap', paddingBottom: 4 }}>
+                        <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--lc-hi)', margin: 0, fontFamily: 'var(--lc-sans)', paddingRight: 2 }}>{lead.name}</h3>
+                        
+                        {m.need && (
+                          <>
+                            <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                            <span style={{ fontSize: 10.5, color: 'var(--lc-mid)', fontWeight: 600 }}>{m.need}</span>
+                          </>
+                        )}
+
+                        {m.quality && (
+                          <>
+                            <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                            <span style={{
+                              padding: '1px 8px', borderRadius: 10, fontSize: 9.5, fontWeight: 600,
+                              background: qualityBadge.bg, color: qualityBadge.color,
+                            }}>
+                              {m.quality.charAt(0).toUpperCase() + m.quality.slice(1)}
+                            </span>
+                          </>
+                        )}
+                        
+                        {m.zones.length > 0 && <span style={{ color: 'var(--lc-line2)' }}>|</span>}
+                        {m.zones.map((z: string) => <ZonePill key={z} zoneName={z} xs />)}
+
+                        <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                        <span style={{
+                          padding: '1px 8px', borderRadius: 10, fontSize: 9.5, fontWeight: 600,
+                          background: sBadge.bg, color: sBadge.color, border: `1px solid ${sBadge.border}`,
+                        }}>
+                          {stageLabel}
+                        </span>
+                      </div>
+
+                      {/* Row 2: Phone + Budget + Extended Info */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11.5, color: 'var(--lc-mid)', fontFamily: 'var(--lc-mono)', fontWeight: 600 }}>{lead.phone}</span>
+
+                        {budgetDisplay && (
+                          <>
+                            <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                            <span style={{
+                              fontSize: 10, padding: '1px 7px',
+                              background: 'var(--lc-bg2)', borderRadius: 4, color: 'var(--lc-mid)',
+                              fontFamily: 'var(--lc-mono)', fontWeight: 500,
+                            }}>
+                              {budgetDisplay}
+                            </span>
+                          </>
+                        )}
+
+                        {m.inBLR !== null && (
+                          <>
+                            <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                            <span style={{ fontSize: 10, color: m.inBLR ? 'var(--lc-mid)' : 'var(--lc-dim)', fontWeight: 500 }}>
+                              {m.inBLR ? 'IN BLR' : 'NOT IN BLR'}
+                            </span>
+                          </>
+                        )}
+
+                        {lead.moveInDate && (
+                          <>
+                            <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                            <span style={{ fontSize: 10, color: 'var(--lc-mid)', fontWeight: 500 }}>
+                              {lead.moveInDate}
+                            </span>
+                          </>
+                        )}
+
+                        {lead.preferredLocation && (
+                          <>
+                            <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <MapPin size={9} color="var(--lc-dim)" />
+                              <span style={{ fontSize: 10, color: 'var(--lc-dim)', fontWeight: 500 }}>{lead.preferredLocation}</span>
+                            </div>
+                          </>
+                        )}
+
+                        {fieldsMissing > 0 && (
+                          <>
+                            <span style={{ color: 'var(--lc-line2)' }}>|</span>
+                            <div style={{
+                              display: 'inline-block',
+                              padding: '1px 6px', borderRadius: 4,
+                              background: 'rgba(239,68,68,0.08)', color: '#ef4444',
+                              fontSize: 9.5, fontWeight: 600,
+                            }}>
+                              {fieldsMissing} missing
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  {/* Geo Intelligence */}
-                  <GeoIntelPanel lead={{ location: lead.preferredLocation, rawText: '', areas: m.areas }} />
+                  {/* Right side — ID + action icons */}
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0, paddingTop: 2 }}>
+                    <span style={{ fontSize: 9, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)' }}>L-{lead.id.slice(-6).toUpperCase()}</span>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setExpandedId(''); }} 
+                        style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
+                        title="Collapse"
+                      >
+                        <ChevronUp size={12} color="var(--lc-mid)" />
+                      </button>
+                      <a href={`tel:${lead.phone}`} style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex' }} title="Call">
+                        <PhoneCall size={12} color="var(--lc-mid)" />
+                      </a>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`);
+                          toast.success('WhatsApp link copied!');
+                        }}
+                        style={{ padding: 5, borderRadius: 6, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }} 
+                        title="Copy WhatsApp API"
+                      >
+                        <MessageCircle size={12} color="#22c55e" />
+                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} title="More options">
+                            <MoreVertical size={12} color="var(--lc-mid)" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => { setSelectedLeadForEdit(lead); setEditDialogOpen(true); }}>
+                            Edit Lead
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
                 </div>
-              );
-            })()}
-            </div>
+
+                {/* ─── Pipeline Stages Stepper ─── */}
+                <div style={{ marginTop: 14, paddingBottom: 4 }}>
+                  <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', padding: '0 4px' }}>
+                    {pipelineStages.map((stage: any, i: number) => {
+                      const isCompleted = i < stageIdx;
+                      const isCurrent = i === stageIdx;
+                      const showLine = i < pipelineStages.length - 1;
+                      const lineCompleted = i < stageIdx;
+
+                      return (
+                        <div key={stage.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', flex: 1, minWidth: 0 }}>
+                          {/* Connecting Line */}
+                          {showLine && (
+                            <div style={{ position: 'absolute', top: 11, left: '50%', right: '-50%', height: 2, background: lineCompleted ? D.acc : D.line2, zIndex: 0 }} />
+                          )}
+                          {/* Node Circle */}
+                          <div style={{
+                            width: 24, height: 24, borderRadius: 12, zIndex: 1, position: 'relative',
+                            background: isCompleted ? D.acc : isCurrent ? '#fff' : D.bg2,
+                            border: `2px solid ${isCompleted || isCurrent ? D.acc : D.line2}`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            boxShadow: isCurrent ? `0 0 0 4px rgba(108,92,231,0.12)` : 'none',
+                            color: isCompleted ? '#fff' : isCurrent ? D.acc : D.mid,
+                            transition: 'all 0.2s ease'
+                          }}>
+                            {isCompleted ? (
+                              <Check size={12} strokeWidth={3} />
+                            ) : isCurrent ? (
+                              <div style={{ width: 8, height: 8, borderRadius: 4, background: D.acc }} />
+                            ) : null}
+                          </div>
+                          {/* Node Label */}
+                          <div style={{
+                            marginTop: 8, fontSize: 9, fontWeight: isCurrent ? 800 : 600,
+                            color: isCurrent ? D.hi : isCompleted ? D.mid : D.dim,
+                            textAlign: 'center', lineHeight: 1.25, width: '100%', padding: '0 2px',
+                            overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
+                          }}>
+                            {stage.label}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* ─── Details Grid (Dynamic Dense) ─── */}
+              <div className="lc-expand-grid" style={{
+                display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: 1, background: D.line, margin: '6px 16px 0', borderRadius: 10, overflow: 'hidden',
+                border: `1px solid ${D.line}`
+              }}>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>LOCATION</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lead.preferredLocation || '-'}>{lead.preferredLocation || '-'}</p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>MOVE-IN D.</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0 }}>{lead.moveInDate || '-'}</p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>NEED</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0 }}>{m.need || '-'}</p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>ROOM</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0 }}>{m.room || '-'}</p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>IN BLR?</div>
+                  <p style={{ fontSize: 11, color: m.inBLR === null ? D.dim : D.hi, fontWeight: 500, margin: 0, fontStyle: m.inBLR === null ? 'italic' : 'normal' }}>
+                    {m.inBLR === null ? 'Unknown' : (m.inBLR ? 'Yes' : 'No')}
+                  </p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>EMAIL</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lead.email}>{lead.email || '-'}</p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>QUALITY</div>
+                  {m.quality ? (
+                    <span style={{
+                      display: 'inline-block', padding: '1px 8px', borderRadius: 10,
+                      fontSize: 9.5, fontWeight: 600,
+                      background: qualityBadge.bg, color: qualityBadge.color,
+                    }}>
+                      {m.quality.charAt(0).toUpperCase() + m.quality.slice(1)}
+                    </span>
+                  ) : <p style={{ fontSize: 11, color: D.dim, margin: 0 }}>-</p>}
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>BUDGET</div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {m.budgetRanges?.length > 0 ? (
+                      m.budgetRanges.map((r: any, i: number) => (
+                        <span key={i} style={{
+                          padding: '1px 6px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                          background: 'rgba(52,211,153,0.1)', color: '#34d399', border: '1px solid rgba(52,211,153,0.3)', fontFamily: 'var(--lc-mono)',
+                        }}>{r.display}</span>
+                      ))
+                    ) : (
+                      <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0 }}>{lead.budget || '-'}</p>
+                    )}
+                  </div>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>TYPE</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0 }}>{m.type || '-'}</p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>SCORE</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0 }}>{lead.leadScore || '-'}</p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>ASSIGNED</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0 }}>{lead.members?.name || '-'}</p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>CREATED</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0 }}>{lead.creator?.name || '-'}</p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>SPECIAL REQS</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lead.specialRequests || '-'}>{lead.specialRequests || '-'}</p>
+                </div>
+                <div style={{ background: D.bg1, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 8.5, color: D.dim, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>CREATED ON</div>
+                  <p style={{ fontSize: 11, color: D.hi, fontWeight: 500, margin: 0 }}>
+                    {new Date(lead.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+
+              {/* ─── Notes & Actions Section ─── */}
+              <div style={{ padding: '12px 16px', background: D.bgRow, borderTop: `1px solid ${D.line}` }}>
+                {/* Notes row */}
+                {lead.notes && (
+                  <div style={{ marginBottom: 10, padding: '8px 10px', background: D.bg1, borderRadius: 8, border: `1px solid ${D.line}` }}>
+                    <div style={{ fontSize: 9, color: D.dim, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>NOTES</div>
+                    <p style={{ fontSize: 12, color: D.text, margin: 0, lineHeight: 1.5 }}>{lead.notes}</p>
+                  </div>
+                )}
+
+                {/* Multiple Areas */}
+                {m.areas.length > 1 && (
+                  <div style={{ background: D.accentBg, border: `1px solid ${D.line}`, borderRadius: 8, padding: '9px 11px', marginBottom: 10 }}>
+                    <div style={{ fontSize: 8.5, color: D.acc, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 5 }}>📍 Areas Detected</div>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {m.areas.map((a: string, i: number) => <span key={i} style={{ fontSize: 11, color: D.text, background: D.bg1, border: `1px solid ${D.line2}`, borderRadius: 5, padding: '2px 8px' }}>{a}</span>)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Geo Intelligence */}
+                <GeoIntelPanel lead={{ location: lead.preferredLocation, rawText: '', areas: m.areas }} />
+
+
+              </div>
+            </motion.div>
           );
         })}
       </div>
 
       {filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: T.dim }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--lc-dim)' }}>
           <div style={{ fontSize: 48, opacity: 0.35, marginBottom: 12 }}>📋</div>
           <div style={{ fontSize: 14 }}>No leads match the current filters</div>
         </div>
@@ -736,7 +1016,6 @@ const Leads = () => {
           </div>
         </div>
       )}
-
 
       {/* Edit Lead Dialog */}
       <EditLeadDialog
