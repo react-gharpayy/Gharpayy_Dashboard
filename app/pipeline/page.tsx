@@ -9,8 +9,10 @@ import { useLeads, usePipelineStages, useSavePipelineStages, useUpdateLead, type
 import { PIPELINE_STAGES, type PipelineStage } from '@/types/crm';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  DndContext, DragOverlay, closestCorners, PointerSensor,
+  DndContext, DragOverlay, pointerWithin, rectIntersection,
+  PointerSensor, TouchSensor,
   useSensor, useSensors, type DragStartEvent, type DragEndEvent,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { toast } from 'sonner';
@@ -31,7 +33,12 @@ import { Button } from '@/components/ui/button';
 function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} className={`min-h-[60px] space-y-2 transition-all rounded-lg ${isOver ? 'bg-accent/5 ring-1 ring-accent/20' : ''}`}>
+    <div
+      ref={setNodeRef}
+      className={`min-h-[200px] flex-1 space-y-2 rounded-lg transition-colors duration-150 ${
+        isOver ? 'bg-accent/10 ring-2 ring-accent/30' : ''
+      }`}
+    >
       {children}
     </div>
   );
@@ -40,7 +47,14 @@ function DroppableColumn({ id, children }: { id: string; children: React.ReactNo
 function DraggableCard({ lead, onClick, onEdit }: { lead: LeadWithRelations; onClick: () => void; onEdit: (lead: LeadWithRelations) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id, data: { lead } });
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} className={`cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-30' : ''}`} onDoubleClick={onClick}>
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{ willChange: isDragging ? 'transform' : 'auto' }}
+      className={`cursor-grab active:cursor-grabbing touch-none select-none transition-opacity duration-150 ${isDragging ? 'opacity-20 scale-[0.98]' : ''}`}
+      onDoubleClick={onClick}
+    >
       <LeadCard lead={{
         id: lead.id, name: lead.name, phone: lead.phone,
         source: lead.source as any, status: lead.status as any,
@@ -299,7 +313,26 @@ const Pipeline = () => {
       : PIPELINE_STAGES.map((stage, index) => ({ ...stage, order: index }));
   const canEditStages = user?.role === 'super_admin';
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } })
+  );
+
+  // Custom collision detection: only consider droppable columns (stage keys), never other draggable cards
+  const stageKeys = useMemo(() => new Set(pipelineStages.map(s => s.key)), [pipelineStages]);
+  const columnOnlyCollision: CollisionDetection = (args) => {
+    // First try pointerWithin — the most intuitive algorithm
+    const pointerCollisions = pointerWithin(args);
+    const columnHits = pointerCollisions.filter(c => stageKeys.has(String(c.id)));
+    if (columnHits.length > 0) return columnHits;
+
+    // Fallback to rectIntersection for edge cases (fast drags)
+    const rectCollisions = rectIntersection(args);
+    const rectColumnHits = rectCollisions.filter(c => stageKeys.has(String(c.id)));
+    if (rectColumnHits.length > 0) return rectColumnHits;
+
+    return [];
+  };
   const activeLead = leads?.find(l => l.id === activeId);
 
   // Conversion rates between stages
@@ -365,7 +398,7 @@ const Pipeline = () => {
         </div>
       }
     >
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={columnOnlyCollision} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="overflow-x-auto pb-4">
           <div className="flex gap-2 min-w-max">
             {pipelineStages.map((stage, i) => {
@@ -374,7 +407,7 @@ const Pipeline = () => {
               return (
                 <div key={stage.key} className="flex items-start">
                   <motion.div
-                    className="pipeline-column bg-secondary/30 w-[272px]"
+                    className="pipeline-column bg-secondary/30 w-[272px] flex flex-col"
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25, delay: i * 0.03 }}
@@ -416,9 +449,14 @@ const Pipeline = () => {
           </div>
         </div>
 
-        <DragOverlay>
+        <DragOverlay
+          dropAnimation={{
+            duration: 200,
+            easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+          }}
+        >
           {activeLead ? (
-            <div className="rotate-1 opacity-90">
+            <div className="rotate-1 opacity-95 shadow-xl rounded-xl" style={{ willChange: 'transform', pointerEvents: 'none' }}>
               <LeadCard lead={{
                 id: activeLead.id, name: activeLead.name, phone: activeLead.phone,
                 source: activeLead.source as any, status: activeLead.status as any,
@@ -428,7 +466,7 @@ const Pipeline = () => {
                 firstResponseTime: activeLead.firstResponseTimeMin ?? undefined,
                 budget: activeLead.budget ?? undefined, preferredLocation: activeLead.preferredLocation ?? undefined,
                 property: activeLead.properties?.name ?? undefined,
-              }} compact stale={new Date(activeLead.lastActivityAt).getTime() < Date.now() - 7 * 1000 * 60 * 60 * 24} />
+              }} compact stale={false} />
             </div>
           ) : null}
         </DragOverlay>
