@@ -26,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { Plus, Loader2, MoreVertical, UserPlus, Users, Shield, User, ChevronRight, KeyRound, Pencil, MapPin, Trophy } from 'lucide-react';
+import { Plus, Loader2, MoreVertical, UserPlus, Users, Shield, User, ChevronRight, KeyRound, Pencil, MapPin, Trophy, Link2, Copy, RefreshCcw } from 'lucide-react';
 import { LoginActivityTab, LeadActivityTab } from '@/components/ActivityTabs';
 import { CreatorLeaderboardPanel } from '@/components/CreatorLeaderboardPanel';
 import { useAuth } from '@/contexts/AuthContext';
@@ -70,7 +70,7 @@ interface ZoneOption {
 
 /* ========== Main Panel ========== */
 export function SuperAdminSettingsPanel() {
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'profiles' | 'activity' | 'leaderboard'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'profiles' | 'activity' | 'leaderboard' | 'integration'>('users');
 
   return (
     <div className="space-y-6">
@@ -82,6 +82,7 @@ export function SuperAdminSettingsPanel() {
           { id: 'profiles', label: 'Profiles', icon: User },
           { id: 'activity', label: 'Activity', icon: KeyRound },
           { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
+          { id: 'integration', label: 'Integration', icon: Link2 },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -103,6 +104,7 @@ export function SuperAdminSettingsPanel() {
       {activeTab === 'leaderboard' && <CreatorLeaderboardPanel compact />}
       {activeTab === 'profiles' && <ProfilesTab />}
       {activeTab === 'activity' && <ActivityTab />}
+      {activeTab === 'integration' && <IntegrationTab />}
     </div>
   );
 }
@@ -983,6 +985,94 @@ function ActivityTab() {
 
       {activeSection === 'login_activity' && <LoginActivityTab />}
       {activeSection === 'lead_activity' && <LeadActivityTab />}
+    </div>
+  );
+}
+
+function IntegrationTab() {
+  const [keyValue, setKeyValue] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [rotating, setRotating] = useState(false);
+  const [rotatedAt, setRotatedAt] = useState<string | null>(null);
+
+  const loadKey = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/integration-key', { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load key');
+      setKeyValue(data.key || '');
+      setRotatedAt(data.rotatedAt ? new Date(data.rotatedAt).toLocaleString('en-IN') : null);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadKey();
+  }, []);
+
+  const handleCopy = async () => {
+    if (!keyValue) return;
+    try {
+      await navigator.clipboard.writeText(keyValue);
+      toast.success('Integration key copied');
+    } catch {
+      toast.error('Copy failed');
+    }
+  };
+
+  const handleRotate = async () => {
+    if (!confirm('Regenerate integration key? This will disconnect existing integrations.')) return;
+    try {
+      setRotating(true);
+      const res = await fetch('/api/integration-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rotate: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to regenerate');
+      setKeyValue(data.key || '');
+      setRotatedAt(data.rotatedAt ? new Date(data.rotatedAt).toLocaleString('en-IN') : null);
+      toast.success('Integration key regenerated');
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  return (
+    <div className="kpi-card max-w-xl">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="font-display font-semibold text-xs text-foreground">Integration Key</h3>
+          <p className="text-[11px] text-muted-foreground mt-1">Use this key to connect Attendance system.</p>
+        </div>
+        {rotatedAt && <span className="text-[10px] text-muted-foreground">Updated {rotatedAt}</span>}
+      </div>
+      {loading ? (
+        <div className="text-xs text-muted-foreground">Loading key...</div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Input value={keyValue} readOnly className="text-xs" />
+            <Button variant="outline" size="sm" onClick={handleCopy} className="gap-1.5 text-xs">
+              <Copy size={12} /> Copy
+            </Button>
+          </div>
+          <Button size="sm" variant="secondary" onClick={handleRotate} disabled={rotating} className="gap-1.5 text-xs">
+            <RefreshCcw size={12} />
+            {rotating ? 'Regenerating...' : 'Regenerate Key'}
+          </Button>
+          <div className="text-[11px] text-muted-foreground">
+            Share this key once in ARENA OS &gt; Connect to CRM. It acts like a pairing code.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

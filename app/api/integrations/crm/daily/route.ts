@@ -3,8 +3,7 @@ import connectToDatabase from '@/lib/mongodb';
 import Lead from '@/models/Lead';
 import Visit from '@/models/Visit';
 import Member from '@/models/Member';
-import mongoose from 'mongoose';
-import { verifyIntegrationRequest } from '@/lib/integration-auth';
+import IntegrationKey from '@/models/IntegrationKey';
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 function getTodayISTRange() {
@@ -20,8 +19,12 @@ function getTodayISTRange() {
 
 export async function GET(req: Request) {
   try {
-    verifyIntegrationRequest(req as any);
     await connectToDatabase();
+    const incomingKey = req.headers.get('x-integration-key') || '';
+    const keyDoc = await IntegrationKey.findOne({}).lean();
+    if (!keyDoc?.key || keyDoc.key !== incomingKey) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const { startUtc, endUtc } = getTodayISTRange();
 
