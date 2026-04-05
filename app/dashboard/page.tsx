@@ -39,6 +39,10 @@ const Dashboard = () => {
   const pipelineStages = (pipelineStagesData && pipelineStagesData.length > 0)
     ? pipelineStagesData
     : PIPELINE_STAGES.map((s, i) => ({ ...s, order: i }));
+  const leadsToday = stats?.leadsToday ?? stats?.newToday ?? 0;
+  const toursToday = stats?.toursScheduledToday ?? stats?.visitsScheduled ?? 0;
+  const LEADS_TARGET = 40;
+  const TOURS_TARGET = 10;
 
   // Realtime subscription removed - will be replaced with polling or typical SWR later
   useEffect(() => {
@@ -63,6 +67,86 @@ const Dashboard = () => {
   const newLeads = leads?.filter(l => l.status === 'new') || [];
   const hotLeads = leads?.filter(l => ((l as any).lead_score ?? 0) >= 70).slice(0, 5) || [];
   const overdueReminders = reminders?.filter(r => isPast(new Date(r.reminder_date))) || [];
+  const perEmployee = (stats as any)?.perEmployee || [];
+  const sortedPerEmployee = [...perEmployee].sort((a: any, b: any) => (b.leadsToday - a.leadsToday) || (b.toursToday - a.toursToday));
+
+  const getISTDayProgress = () => {
+    const now = new Date();
+    const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+    const minutes = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+    return Math.min(1, Math.max(0.05, minutes / (24 * 60)));
+  };
+
+  const calcOnPace = (value: number) => {
+    const progress = getISTDayProgress();
+    if (!progress) return value;
+    return Math.round(value / progress);
+  };
+
+  const DailyTargetCard = ({
+    title,
+    value,
+    target,
+    accent,
+    footerLeft,
+    footerRight,
+    helperText,
+  }: {
+    title: string;
+    value: number;
+    target: number;
+    accent: string;
+    footerLeft: string;
+    footerRight: string;
+    helperText?: string;
+  }) => {
+    const remaining = Math.max(0, target - value);
+    const progress = Math.min(100, Math.round((value / Math.max(target, 1)) * 100));
+    const onPace = calcOnPace(value);
+    const dots = 12;
+    const filledDots = Math.round((progress / 100) * dots);
+
+    return (
+      <div className="kpi-card">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+          <span className="text-[10px] text-muted-foreground">Target {target}</span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <div className="text-2xl font-display font-bold text-foreground">{value}</div>
+          <div className="text-xs text-muted-foreground">/ {target}</div>
+        </div>
+        <p className="text-2xs text-muted-foreground mt-2">
+          {value} done · {remaining} to go
+        </p>
+        <div className="mt-3 h-1.5 rounded-full bg-secondary/70 overflow-hidden">
+          <div className="h-full" style={{ width: `${progress}%`, background: accent }} />
+        </div>
+        <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+          <span>{progress}% of daily target</span>
+          <span>On pace for {onPace} by EOD</span>
+        </div>
+        <div className="mt-3 grid grid-cols-12 gap-1">
+          {Array.from({ length: dots }).map((_, i) => (
+            <div
+              key={i}
+              className="h-2 rounded-sm"
+              style={{ background: i < filledDots ? accent : 'hsl(var(--secondary))' }}
+            />
+          ))}
+        </div>
+        <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
+          <span>{footerLeft}</span>
+          <span>{footerRight}</span>
+        </div>
+        {helperText && (
+          <div className="mt-4">
+            <p className="text-2xs text-muted-foreground">{helperText}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const handleComplete = async (id: string) => {
     try {
@@ -102,15 +186,66 @@ const Dashboard = () => {
       <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" variants={container} initial="hidden" animate="show">
         <KpiCard title="Total Leads" value={stats?.totalLeads ?? 0} icon={<Users size={17} />} />
         <KpiCard title="Avg Response Time" value={stats?.avgResponseTime ?? 0} suffix="min" icon={<Clock size={17} />} color="hsl(var(--warning))" />
-        <KpiCard title="Visits Scheduled" value={stats?.visitsScheduled ?? 0} icon={<CalendarCheck size={17} />} color="hsl(173, 55%, 42%)" />
-        <KpiCard title="Bookings Closed" value={stats?.bookingsClosed ?? 0} icon={<CheckCircle size={17} />} color="hsl(var(--success))" />
+        <DailyTargetCard
+          title="Leads Added Today"
+          value={leadsToday}
+          target={LEADS_TARGET}
+          accent="hsl(var(--accent))"
+          footerLeft={`${leadsToday} leads added`}
+          footerRight={`${Math.max(0, LEADS_TARGET - leadsToday)} more to go`}
+          helperText={`At the current pace, you’re tracking to finish with ${calcOnPace(leadsToday)}. Pick up speed after lunch.`}
+        />
+        <DailyTargetCard
+          title="Tours Scheduled Today"
+          value={toursToday}
+          target={TOURS_TARGET}
+          accent="hsl(173, 55%, 42%)"
+          footerLeft={`${toursToday} tours scheduled`}
+          footerRight={`${Math.max(0, TOURS_TARGET - toursToday)} more needed`}
+          helperText="Next check-in window opens at afternoon. Update your progress then."
+        />
       </motion.div>
       <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" variants={container} initial="hidden" animate="show">
         <KpiCard title="Conversion Rate" value={stats?.conversionRate ?? 0} suffix="%" icon={<TrendingUp size={17} />} color="hsl(262, 55%, 55%)" />
         <KpiCard title="SLA Compliance" value={stats?.slaCompliance ?? 0} suffix="%" icon={<Timer size={17} />} color="hsl(var(--info))" />
-        <KpiCard title="New Today" value={stats?.newToday ?? 0} icon={<Users size={17} />} color="hsl(var(--destructive))" />
         <KpiCard title="SLA Breaches" value={stats?.slaBreaches ?? 0} icon={<AlertTriangle size={17} />} color="hsl(0, 55%, 50%)" />
+        <KpiCard title="Bookings Closed" value={stats?.bookingsClosed ?? 0} icon={<CheckCircle size={17} />} color="hsl(var(--success))" />
       </motion.div>
+
+      {/* Daily team numbers */}
+      <div className="kpi-card mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-display font-semibold text-xs text-foreground">Today - Per Employee</h3>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Leads added and tours scheduled today</p>
+          </div>
+          <div className="text-[10px] text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
+            {sortedPerEmployee.length} members
+          </div>
+        </div>
+        {sortedPerEmployee.length === 0 ? (
+          <p className="text-2xs text-muted-foreground text-center py-6">No activity recorded today.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {sortedPerEmployee.map((row: any) => (
+              <div key={row.memberId} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
+                <div>
+                  <p className="text-xs font-medium text-foreground">{row.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{row.zoneName || 'No Zone'}</p>
+                </div>
+                <div className="flex items-center gap-3 text-[10px]">
+                  <span className="px-2 py-0.5 rounded-full bg-accent/10 text-accent font-semibold">
+                    Leads {row.leadsToday}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-info/10 text-info font-semibold">
+                    Tours {row.toursToday}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Revenue Forecast */}
       {bookingStats && (bookingStats.revenue > 0 || bookingStats.pendingRevenue > 0) && (
