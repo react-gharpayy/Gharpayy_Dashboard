@@ -8,7 +8,7 @@ import { useLeadsPaginated, useOfficeZones, usePipelineStages } from '@/hooks/us
 import { useBulkUpdateLeads, useDeleteLeads } from '@/hooks/useLeadDetails';
 import { useUpdateLead, useAgents, type LeadWithRelations } from '@/hooks/useCrmData';
 import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
-import { Filter, Download, Trash2, PhoneCall, MessageCircle, MoreVertical, MapPin, ChevronDown, ChevronUp, Check } from 'lucide-react';
+import { Filter, Download, Trash2, PhoneCall, MessageCircle, MoreVertical, MapPin, ChevronDown, ChevronUp, Check, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,6 +110,8 @@ const Leads = () => {
   const [filterDateMode, setFilterDateMode] = useState<'newest' | 'oldest' | 'date' | 'month'>('newest');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterMonth, setFilterMonth] = useState<string>('');
+  const [updatingStageLeadId, setUpdatingStageLeadId] = useState<string | null>(null);
+  const [updatingStageTarget, setUpdatingStageTarget] = useState<{ leadId: string; stageKey: string } | null>(null);
   
   const PAGE_SIZE = 50;
   const { data: paginatedData, isLoading } = useLeadsPaginated(page, PAGE_SIZE);
@@ -199,6 +201,21 @@ const Leads = () => {
       toast.success(`${selectedIds.size} leads deleted`);
       setSelectedIds(new Set());
     } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handleInlineStageChange = async (lead: LeadWithRelations, stageKey: string, stageLabel: string) => {
+    if (updatingStageLeadId || lead.status === stageKey) return;
+    try {
+      setUpdatingStageLeadId(lead.id);
+      setUpdatingStageTarget({ leadId: lead.id, stageKey });
+      await updateLead.mutateAsync({ id: lead.id, status: stageKey as any });
+      toast.success(`Lead moved to ${stageLabel}`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update lead stage');
+    } finally {
+      setUpdatingStageLeadId(null);
+      setUpdatingStageTarget(null);
+    }
   };
 
   const handleExport = () => {
@@ -831,15 +848,36 @@ const Leads = () => {
 
                 {/* ─── Pipeline Stages Stepper ─── */}
                 <div style={{ marginTop: 14, paddingBottom: 4 }}>
-                  <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', padding: '0 4px' }}>
+                  <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', padding: '0 4px' }} onClick={(e) => e.stopPropagation()}>
                     {pipelineStages.map((stage: any, i: number) => {
                       const isCompleted = i < stageIdx;
                       const isCurrent = i === stageIdx;
                       const showLine = i < pipelineStages.length - 1;
                       const lineCompleted = i < stageIdx;
+                      const isStageUpdating = updatingStageLeadId === lead.id;
+                      const isTargetStageUpdating = updatingStageTarget?.leadId === lead.id && updatingStageTarget.stageKey === stage.key;
 
                       return (
-                        <div key={stage.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', flex: 1, minWidth: 0 }}>
+                        <button
+                          key={stage.key}
+                          type="button"
+                          onClick={() => handleInlineStageChange(lead, stage.key, stage.label)}
+                          disabled={isStageUpdating || isCurrent}
+                          title={isCurrent ? 'Current stage' : `Move to ${stage.label}`}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            position: 'relative',
+                            flex: 1,
+                            minWidth: 0,
+                            border: 'none',
+                            background: 'transparent',
+                            padding: 0,
+                            cursor: isStageUpdating || isCurrent ? 'not-allowed' : 'pointer',
+                            opacity: isStageUpdating && !isCurrent ? 0.55 : 1,
+                          }}
+                        >
                           {/* Connecting Line */}
                           {showLine && (
                             <div style={{ position: 'absolute', top: 11, left: '50%', right: '-50%', height: 2, background: lineCompleted ? D.acc : D.line2, zIndex: 0 }} />
@@ -854,7 +892,9 @@ const Leads = () => {
                             color: isCompleted ? '#fff' : isCurrent ? D.acc : D.mid,
                             transition: 'all 0.2s ease'
                           }}>
-                            {isCompleted ? (
+                            {isTargetStageUpdating ? (
+                              <Loader2 size={11} strokeWidth={2.5} className="animate-spin" />
+                            ) : isCompleted ? (
                               <Check size={12} strokeWidth={3} />
                             ) : isCurrent ? (
                               <div style={{ width: 8, height: 8, borderRadius: 4, background: D.acc }} />
@@ -869,7 +909,7 @@ const Leads = () => {
                           }}>
                             {stage.label}
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
