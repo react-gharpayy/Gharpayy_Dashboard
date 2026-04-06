@@ -30,12 +30,17 @@ async function validateAgentAssignment(authUser: any, agentId?: string | null) {
   return null;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const authUser = await getAuthUserFromCookie();
     if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     await connectToDatabase();
+
+    const url = new URL(req.url);
+    const skip = Math.max(0, parseInt(url.searchParams.get('skip') || '0'));
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50')));
+    const status = url.searchParams.get('status');
 
     const query: any = {};
     if (!['super_admin', 'manager', 'admin', 'member'].includes(authUser.role)) {
@@ -47,9 +52,20 @@ export async function GET() {
       query.assignedMemberId = authUser.id;
     }
 
+    // Optional status filter
+    if (status) {
+      query.status = status;
+    }
+
+    // Get total count for pagination
+    const total = await Lead.countDocuments(query);
+
+    // Fetch paginated leads
     const leads = await Lead.find(query)
       .populate('propertyId', '_id name')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     const assignedMemberIds = Array.from(
       new Set(leads.map((l: any) => l.assignedMemberId?.toString()).filter(Boolean))
@@ -93,7 +109,7 @@ export async function GET() {
           : null,
     }));
 
-    return NextResponse.json(transformedLeads);
+    return NextResponse.json({ leads: transformedLeads, total });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }

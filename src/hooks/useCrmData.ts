@@ -52,38 +52,43 @@ export type CreatorLeaderboardResponse = {
 };
 
 
-// Leads (all)
+// Leads (all) - handles new { leads, total } format
 export const useLeads = () =>
   useQuery({
     queryKey: ['leads'],
     queryFn: async () => {
       const res = await fetch('/api/leads');
       if (!res.ok) throw new Error('Failed to fetch leads');
-      return res.json() as Promise<LeadWithRelations[]>;
+      const data = await res.json();
+      // New format returns { leads, total }, extract leads array
+      return (data.leads || data) as Promise<LeadWithRelations[]>;
     },
+    staleTime: 30000, // 30s cache
   });
 
-// Leads (paginated)
+// Leads (paginated) - server-side pagination
 export const useLeadsPaginated = (page = 0, pageSize = 50) =>
   useQuery({
     queryKey: ['leads-paginated', page, pageSize],
     queryFn: async () => {
-      const res = await fetch('/api/leads');
+      const skip = page * pageSize;
+      const res = await fetch(`/api/leads?skip=${skip}&limit=${pageSize}`);
       if (!res.ok) throw new Error('Failed to fetch leads');
-      const data = await res.json();
-      return { leads: data as LeadWithRelations[], total: data.length };
+      return res.json() as Promise<{ leads: LeadWithRelations[]; total: number }>;
     },
+    staleTime: 30000, // 30s cache before refetch
   });
 
-export const useLeadsByStatus = (status: string) =>
+export const useLeadsByStatus = (status: string, page = 0, pageSize = 50) =>
   useQuery({
-    queryKey: ['leads', 'status', status],
+    queryKey: ['leads-by-status', status, page, pageSize],
     queryFn: async () => {
-      const res = await fetch('/api/leads');
-      if (!res.ok) throw new Error('Failed to fetch leads');
-      const data = await res.json() as LeadWithRelations[];
-      return data.filter(l => l.status === status);
+      const skip = page * pageSize;
+      const res = await fetch(`/api/leads?status=${status}&skip=${skip}&limit=${pageSize}`);
+      if (!res.ok) throw new Error('Failed to fetch leads by status');
+      return res.json() as Promise<{ leads: LeadWithRelations[]; total: number }>;
     },
+    staleTime: 30000, // 30s cache before refetch
   });
 
 export const useCreateLead = () => {
