@@ -58,6 +58,9 @@ export type LeadsQueryFilters = {
   zone?: string;
   duplicate?: 'all' | 'duplicate' | 'unique';
   sort?: 'newest' | 'oldest' | 'alphabetical';
+  period?: 'all' | 'today' | 'custom';
+  from?: string;
+  to?: string;
 };
 
 
@@ -91,6 +94,9 @@ export const useLeadsPaginated = (page = 0, pageSize = 50, filters?: LeadsQueryF
       if (filters?.zone && filters.zone !== 'all') params.set('zone', filters.zone);
       if (filters?.duplicate && filters.duplicate !== 'all') params.set('duplicate', filters.duplicate);
       if (filters?.sort) params.set('sort', filters.sort);
+      if (filters?.period && filters.period !== 'all') params.set('period', filters.period);
+      if (filters?.from) params.set('from', filters.from);
+      if (filters?.to) params.set('to', filters.to);
 
       const res = await fetch(`/api/leads?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch leads');

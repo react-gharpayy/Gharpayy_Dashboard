@@ -50,6 +50,9 @@ export async function GET(req: Request) {
     const q = (url.searchParams.get('q') || '').trim();
     const duplicate = url.searchParams.get('duplicate');
     const sort = url.searchParams.get('sort');
+    const period = url.searchParams.get('period');
+    const fromQuery = url.searchParams.get('from');
+    const toQuery = url.searchParams.get('to');
     const sortQuery: Record<string, 1 | -1> = sort === 'alphabetical'
       ? { name: 1, createdAt: -1 }
       : { createdAt: sort === 'oldest' ? 1 : -1 };
@@ -83,6 +86,19 @@ export async function GET(req: Request) {
         { name: { $regex: safe, $options: 'i' } },
         { phone: { $regex: safe, $options: 'i' } },
       ];
+    }
+
+    if (period === 'today') {
+      const now = new Date();
+      const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+      query.createdAt = { $gte: from, $lte: now };
+    } else if (period === 'custom' && fromQuery && toQuery) {
+      const from = new Date(fromQuery);
+      const to = new Date(toQuery);
+      if (!isNaN(from.getTime()) && !isNaN(to.getTime())) {
+        to.setUTCHours(23, 59, 59, 999);
+        query.createdAt = { $gte: from, $lte: to };
+      }
     }
 
     // Duplicate/unique filtering must be done before pagination.

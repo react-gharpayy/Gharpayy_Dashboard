@@ -8,7 +8,7 @@ import { useLeadsPaginated, useOfficeZones, usePipelineStages, type LeadsQueryFi
 import { useBulkUpdateLeads, useDeleteLeads } from '@/hooks/useLeadDetails';
 import { useUpdateLead, useAgents, type LeadWithRelations } from '@/hooks/useCrmData';
 import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
-import { Filter, Download, Trash2, PhoneCall, MessageCircle, MoreVertical, MapPin, ChevronDown, ChevronUp, Check, Loader2 } from 'lucide-react';
+import { Filter, Download, Trash2, PhoneCall, MessageCircle, MoreVertical, MapPin, ChevronDown, ChevronUp, Check, Loader2, CalendarDays } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -107,17 +108,65 @@ const Leads = () => {
   const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<LeadWithRelations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   
-  const [filterDateMode, setFilterDateMode] = useState<'newest' | 'oldest' | 'alphabetical' | 'date' | 'month'>('newest');
+  const [filterDateMode, setFilterDateMode] = useState<'newest' | 'oldest' | 'alphabetical' | 'date' | 'month' | 'today' | 'date_range'>('newest');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterMonth, setFilterMonth] = useState<string>('');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
   const [updatingStageLeadId, setUpdatingStageLeadId] = useState<string | null>(null);
   const [updatingStageTarget, setUpdatingStageTarget] = useState<{ leadId: string; stageKey: string } | null>(null);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+  const hasValidCustomRange = (() => {
+    if (!fromDate || !toDate) return false;
+    return new Date(fromDate) <= new Date(toDate);
+  })();
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 350);
     return () => clearTimeout(t);
   }, [searchQuery]);
+
+  const monthRange = (() => {
+    if (!filterMonth) return null;
+    const [yearStr, monthStr] = filterMonth.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    if (!year || !month) return null;
+    const from = `${yearStr}-${monthStr}-01`;
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const to = `${yearStr}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+    return { from, to };
+  })();
+
+  const periodForDateFilter: 'all' | 'today' | 'custom' =
+    filterDateMode === 'today'
+      ? 'today'
+      : (
+          (filterDateMode === 'date' && !!filterDate) ||
+          (filterDateMode === 'month' && !!monthRange) ||
+          (filterDateMode === 'date_range' && hasValidCustomRange)
+        )
+          ? 'custom'
+          : 'all';
+
+  const fromForDateFilter =
+    filterDateMode === 'date'
+      ? (filterDate || undefined)
+      : filterDateMode === 'month'
+        ? (monthRange?.from || undefined)
+        : filterDateMode === 'date_range' && hasValidCustomRange
+          ? fromDate
+          : undefined;
+
+  const toForDateFilter =
+    filterDateMode === 'date'
+      ? (filterDate || undefined)
+      : filterDateMode === 'month'
+        ? (monthRange?.to || undefined)
+        : filterDateMode === 'date_range' && hasValidCustomRange
+          ? toDate
+          : undefined;
 
   const serverFilters: LeadsQueryFilters = {
     q: debouncedSearchQuery.trim() || undefined,
@@ -126,11 +175,14 @@ const Leads = () => {
     zone: filterZone,
     duplicate: filterDuplicate as LeadsQueryFilters['duplicate'],
     sort: filterDateMode === 'oldest' ? 'oldest' : filterDateMode === 'alphabetical' ? 'alphabetical' : 'newest',
+    period: periodForDateFilter,
+    from: fromForDateFilter,
+    to: toForDateFilter,
   };
 
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearchQuery, filterSource, filterStatus, filterDuplicate, filterZone, filterDateMode]);
+  }, [debouncedSearchQuery, filterSource, filterStatus, filterDuplicate, filterZone, filterDateMode, filterDate, filterMonth, fromDate, toDate, hasValidCustomRange]);
   
   const PAGE_SIZE = 50;
   const { data: paginatedData, isLoading } = useLeadsPaginated(page, PAGE_SIZE, serverFilters);
@@ -169,19 +221,6 @@ const Leads = () => {
       if (filterDuplicate === 'unique' && l.isDuplicate) return false;
       if (filterZone !== 'all' && (l as any).zone !== filterZone) return false;
       
-      if (filterDateMode === 'date' || filterDateMode === 'month') {
-        if (!l.moveInDate) return false;
-        const parsed = parseMoveInV2(l.moveInDate);
-        if (!parsed || !parsed.resolved) return false;
-        const leadDate = parsed.resolved;
-        if (filterDateMode === 'date' && filterDate) {
-          const filterDateObj = new Date(filterDate);
-          if (leadDate.getFullYear() !== filterDateObj.getFullYear() || leadDate.getMonth() !== filterDateObj.getMonth() || leadDate.getDate() !== filterDateObj.getDate()) return false;
-        } else if (filterDateMode === 'month' && filterMonth) {
-          const [year, month] = filterMonth.split('-').map(Number);
-          if (leadDate.getFullYear() !== year || leadDate.getMonth() + 1 !== month) return false;
-        }
-      }
       return true;
     });
 
@@ -265,22 +304,22 @@ const Leads = () => {
       {/* Filters Area */}
       <div className="flex flex-col gap-3 mb-5">
         <div className="flex items-center justify-between">
-          <Button variant="outline" size="sm" onClick={() => setShowFiltersMobile(!showFiltersMobile)} className="ml-1.5 md:ml-0 gap-2 h-8 text-xs rounded-xl md:hidden">
+          <Button variant="outline" size="sm" onClick={() => setShowFiltersMobile(!showFiltersMobile)} className="ml-1.5 md:ml-0 gap-1.5 h-7 text-[11px] rounded-xl md:hidden">
             <Filter size={14} /> Filters
-            {(!showFiltersMobile && (filterSource !== 'all' || filterStatus !== 'all' || filterDuplicate !== 'all' || filterZone !== 'all' || filterDateMode !== 'newest')) && <div className="w-1.5 h-1.5 rounded-full bg-accent" />}
+            {(!showFiltersMobile && (filterSource !== 'all' || filterStatus !== 'all' || filterDuplicate !== 'all' || filterZone !== 'all' || filterDateMode !== 'newest' || fromDate || toDate)) && <div className="w-1.5 h-1.5 rounded-full bg-accent" />}
           </Button>
 
           {/* Desktop Filters */}
-          <div className="hidden md:flex items-center gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div className="hidden md:flex items-center gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             <Input 
               placeholder="Search Name, Phone, ID..." 
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="h-8 text-2xs rounded-xl w-48 bg-card border-border"
+              className="h-7 text-[10px] rounded-xl w-40 bg-card border-border"
             />
-            <Filter size={13} className="text-muted-foreground shrink-0" />
+            <Filter size={12} className="text-muted-foreground shrink-0" />
             <Select value={filterSource} onValueChange={setFilterSource}>
-              <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[110px] bg-card border-border">
+              <SelectTrigger className="shrink-0 h-7 text-[10px] rounded-xl w-auto min-w-[96px] bg-card border-border px-2">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom" align="start">
@@ -289,7 +328,7 @@ const Leads = () => {
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[110px] bg-card border-border">
+              <SelectTrigger className="shrink-0 h-7 text-[10px] rounded-xl w-auto min-w-[96px] bg-card border-border px-2">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom" align="start">
@@ -298,7 +337,7 @@ const Leads = () => {
               </SelectContent>
             </Select>
             <Select value={filterDuplicate} onValueChange={setFilterDuplicate}>
-              <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[110px] bg-card border-border">
+              <SelectTrigger className="shrink-0 h-7 text-[10px] rounded-xl w-auto min-w-[96px] bg-card border-border px-2">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom" align="start">
@@ -308,7 +347,7 @@ const Leads = () => {
               </SelectContent>
             </Select>
             <Select value={filterZone} onValueChange={setFilterZone}>
-              <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[100px] bg-card border-border">
+              <SelectTrigger className="shrink-0 h-7 text-[10px] rounded-xl w-auto min-w-[88px] bg-card border-border px-2">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom" align="start">
@@ -317,8 +356,8 @@ const Leads = () => {
               </SelectContent>
             </Select>
 
-            <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); }}>
-              <SelectTrigger className="shrink-0 h-8 text-2xs rounded-xl w-auto min-w-[110px] bg-card border-border">
+            <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); setFromDate(''); setToDate(''); }}>
+              <SelectTrigger className="shrink-0 h-7 text-[10px] rounded-xl w-auto min-w-[96px] bg-card border-border px-2">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom" align="start">
@@ -327,15 +366,58 @@ const Leads = () => {
                 <SelectItem value="alphabetical">Alphabetical (A-Z)</SelectItem>
                 <SelectItem value="date">By Date</SelectItem>
                 <SelectItem value="month">By Month</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="date_range">Date Range</SelectItem>
               </SelectContent>
             </Select>
+
+            {filterDateMode === 'date_range' && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={(fromDate && toDate) ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-7 px-2 text-[10px] rounded-xl gap-1"
+                  >
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    <span className="max-w-[105px] truncate">
+                      {fromDate && toDate ? `${fromDate} to ${toDate}` : 'Date Range'}
+                    </span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-[245px] p-3">
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">From</p>
+                      <Input
+                        type="date"
+                        value={fromDate}
+                        onChange={(e) => setFromDate(e.target.value)}
+                        className="h-8 text-[11px]"
+                        aria-label="From date"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">To</p>
+                      <Input
+                        type="date"
+                        value={toDate}
+                        onChange={(e) => setToDate(e.target.value)}
+                        className="h-8 text-[11px]"
+                        aria-label="To date"
+                      />
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
             
             {filterDateMode === 'date' && (
               <input 
                 type="date" 
                 value={filterDate}
                 onChange={e => setFilterDate(e.target.value)}
-                className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30"
+                className="shrink-0 text-[10px] bg-card border border-border rounded-xl px-2 py-1.5 text-foreground outline-none focus:ring-2 focus:ring-ring/30"
               />
             )}
             
@@ -344,12 +426,12 @@ const Leads = () => {
                 type="month" 
                 value={filterMonth}
                 onChange={e => setFilterMonth(e.target.value)}
-                className="shrink-0 text-2xs bg-card border border-border rounded-xl px-3 py-2 text-foreground outline-none focus:ring-2 focus:ring-ring/30"
+                className="shrink-0 text-[10px] bg-card border border-border rounded-xl px-2 py-1.5 text-foreground outline-none focus:ring-2 focus:ring-ring/30"
               />
             )}
           </div>
 
-          <Button variant="outline" size="sm" className="mr-1.5 md:mr-0 h-[30px] md:h-8 gap-1.5 text-xs md:text-2xs rounded-lg md:rounded-xl px-3 ml-auto shrink-0" onClick={handleExport}>
+          <Button variant="outline" size="sm" className="mr-1.5 md:mr-0 h-7 md:h-7 gap-1 text-[11px] md:text-[10px] rounded-lg md:rounded-xl px-2 ml-auto shrink-0" onClick={handleExport}>
             <Download size={13} className="md:w-3 md:h-3" /> <span className="hidden sm:inline">Export</span>
           </Button>
         </div>
@@ -392,7 +474,7 @@ const Leads = () => {
                 {officeZones?.map(z => <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); }}>
+            <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); setFromDate(''); setToDate(''); }}>
               <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="newest">Newest First</SelectItem>
@@ -400,8 +482,45 @@ const Leads = () => {
                 <SelectItem value="alphabetical">Alphabetical (A-Z)</SelectItem>
                 <SelectItem value="date">By Date</SelectItem>
                 <SelectItem value="month">By Month</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="date_range">Date Range</SelectItem>
               </SelectContent>
             </Select>
+            {filterDateMode === 'date_range' && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={(fromDate && toDate) ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-9 text-xs rounded-lg justify-start gap-2"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    <span className="truncate">{fromDate && toDate ? `${fromDate} to ${toDate}` : 'Date Range'}</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[260px] p-3">
+                  <div className="space-y-2">
+                    <Input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="h-9 text-xs"
+                      aria-label="From date"
+                    />
+                    <Input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="h-9 text-xs"
+                      aria-label="To date"
+                    />
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+            {filterDateMode === 'date_range' && fromDate && toDate && !hasValidCustomRange && (
+              <p className="text-[10px] text-muted-foreground">Invalid range: From date should be before To date</p>
+            )}
             {filterDateMode === 'date' && (
               <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
                 className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none" />
