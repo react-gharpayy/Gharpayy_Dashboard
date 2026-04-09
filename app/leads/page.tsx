@@ -443,24 +443,24 @@ const Leads = () => {
               placeholder="Search Name, Phone, ID..." 
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="h-8 text-xs rounded-lg w-full bg-card border-border"
+              className="h-7 text-[10px] rounded-lg w-full bg-card border-border"
             />
             <Select value={filterSource} onValueChange={setFilterSource}>
-              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full h-8 text-[10px] rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="all">All Sources</SelectItem>
                 {Object.entries(SOURCE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v as string}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full h-8 text-[10px] rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="all">All Stages</SelectItem>
                 {pipelineStages.map((s: any) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterDuplicate} onValueChange={setFilterDuplicate}>
-              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full h-8 text-[10px] rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="all">All Records</SelectItem>
                 <SelectItem value="unique">Unique Only</SelectItem>
@@ -468,14 +468,14 @@ const Leads = () => {
               </SelectContent>
             </Select>
             <Select value={filterZone} onValueChange={setFilterZone}>
-              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full h-8 text-[10px] rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="all">All Zones</SelectItem>
                 {officeZones?.map(z => <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); setFromDate(''); setToDate(''); }}>
-              <SelectTrigger className="w-full h-9 text-xs rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full h-8 text-[10px] rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 <SelectItem value="newest">Newest First</SelectItem>
                 <SelectItem value="oldest">Oldest First</SelectItem>
@@ -492,7 +492,7 @@ const Leads = () => {
                   <Button
                     variant={(fromDate && toDate) ? 'default' : 'outline'}
                     size="sm"
-                    className="h-9 text-xs rounded-lg justify-start gap-2"
+                    className="h-8 text-[10px] rounded-lg justify-start gap-1.5"
                   >
                     <CalendarDays className="h-4 w-4" />
                     <span className="truncate">{fromDate && toDate ? `${fromDate} to ${toDate}` : 'Date Range'}</span>
@@ -504,14 +504,14 @@ const Leads = () => {
                       type="date"
                       value={fromDate}
                       onChange={(e) => setFromDate(e.target.value)}
-                      className="h-9 text-xs"
+                      className="h-8 text-[10px]"
                       aria-label="From date"
                     />
                     <Input
                       type="date"
                       value={toDate}
                       onChange={(e) => setToDate(e.target.value)}
-                      className="h-9 text-xs"
+                      className="h-8 text-[10px]"
                       aria-label="To date"
                     />
                   </div>
@@ -523,11 +523,11 @@ const Leads = () => {
             )}
             {filterDateMode === 'date' && (
               <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
-                className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none" />
+                className="w-full text-[10px] bg-card border border-border rounded-lg px-2.5 py-1.5 text-foreground outline-none" />
             )}
             {filterDateMode === 'month' && (
               <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
-                className="w-full text-xs bg-card border border-border rounded-lg px-3 py-2 text-foreground outline-none" />
+                className="w-full text-[10px] bg-card border border-border rounded-lg px-2.5 py-1.5 text-foreground outline-none" />
             )}
           </motion.div>
         )}
@@ -587,6 +587,16 @@ const Leads = () => {
           .lc-avatar { display: none !important; }
           .lc-card { padding: 8px 10px !important; }
           .lc-expand-grid { grid-template-columns: 1fr 1fr !important; }
+          .lc-card .lc-name { font-size: 11px !important; }
+          .lc-card .lc-phone { font-size: 9px !important; }
+          .lc-card .lc-meta { font-size: 8.5px !important; }
+          .lc-card .lc-chip { font-size: 8px !important; padding: 1px 5px !important; }
+          .lc-card .lc-stage { font-size: 8px !important; padding: 1px 6px !important; }
+          .lc-card .lc-progress-pct { font-size: 8px !important; min-width: 16px !important; }
+          .lc-card .lc-actions-row { gap: 3px !important; }
+          .lc-card .lc-actions-row button,
+          .lc-card .lc-actions-row a { padding: 4px !important; }
+          .lc-card .lc-timestamp { font-size: 8px !important; }
         }
       `}</style>
 
@@ -602,7 +612,13 @@ const Leads = () => {
           const fieldsMissing = computeFieldsMissing(lead);
           const progressColor = getProgressColor(progress);
           const qualityBadge = getQualityBadgeColor(m.quality || '');
-          const createdDate = new Date(lead.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+          const createdAtStamp = new Date(lead.createdAt).toLocaleString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          });
 
           // Budget display for collapsed card
           const budgetDisplay = m.budgetRanges?.length > 0
@@ -634,7 +650,7 @@ const Leads = () => {
                   (e.currentTarget as HTMLElement).style.boxShadow = 'none';
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                   {/* Checkbox */}
                   {canManageLeadAssignments && (
                     <div onClick={e => e.stopPropagation()} style={{ paddingTop: 6, flexShrink: 0 }}>
@@ -644,11 +660,11 @@ const Leads = () => {
 
                   {/* Avatar */}
                   <div className="lc-avatar" style={{
-                    width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
+                    width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
                     background: `hsl(${hue},30%,92%)`,
                     border: `2px solid hsl(${hue},34%,84%)`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 16, fontWeight: 700, color: `hsl(${hue},38%,42%)`,
+                    fontSize: 14, fontWeight: 700, color: `hsl(${hue},38%,42%)`,
                     fontFamily: 'var(--lc-sans)',
                   }}>
                     {(lead.name || '?')[0]?.toUpperCase()}
@@ -658,19 +674,19 @@ const Leads = () => {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {/* Row 1: Name + Badges */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap', paddingBottom: 4 }}>
-                      <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--lc-hi)', margin: 0, fontFamily: 'var(--lc-sans)', paddingRight: 2 }}>{lead.name}</h3>
+                      <h3 className="lc-name" style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-hi)', margin: 0, fontFamily: 'var(--lc-sans)', paddingRight: 2 }}>{lead.name}</h3>
                       
                       {m.need && (
                         <>
                           <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <span style={{ fontSize: 10.5, color: 'var(--lc-mid)', fontWeight: 600 }}>{m.need}</span>
+                          <span className="lc-meta" style={{ fontSize: 10.5, color: 'var(--lc-mid)', fontWeight: 600 }}>{m.need}</span>
                         </>
                       )}
 
                       {m.quality && (
                         <>
                           <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <span style={{
+                          <span className="lc-chip" style={{
                             padding: '1px 8px', borderRadius: 10, fontSize: 9.5, fontWeight: 600,
                             background: qualityBadge.bg, color: qualityBadge.color,
                           }}>
@@ -683,7 +699,7 @@ const Leads = () => {
                       {m.zones.map((z: string) => <ZonePill key={z} zoneName={z} xs />)}
 
                       <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                      <span style={{
+                      <span className="lc-stage" style={{
                         padding: '1px 8px', borderRadius: 10, fontSize: 9.5, fontWeight: 600,
                         background: sBadge.bg, color: sBadge.color, border: `1px solid ${sBadge.border}`,
                       }}>
@@ -693,12 +709,12 @@ const Leads = () => {
 
                     {/* Row 2: Phone + Budget + Extended Info */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 11.5, color: 'var(--lc-mid)', fontFamily: 'var(--lc-mono)', fontWeight: 600 }}>{lead.phone}</span>
+                      <span className="lc-phone" style={{ fontSize: 11, color: 'var(--lc-mid)', fontFamily: 'var(--lc-mono)', fontWeight: 600 }}>{lead.phone}</span>
 
                       {budgetDisplay && (
                         <>
                           <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <span style={{
+                          <span className="lc-chip" style={{
                             fontSize: 10, padding: '1px 7px',
                             background: 'var(--lc-bg2)', borderRadius: 4, color: 'var(--lc-mid)',
                             fontFamily: 'var(--lc-mono)', fontWeight: 500,
@@ -711,7 +727,7 @@ const Leads = () => {
                       {m.inBLR !== null && (
                         <>
                           <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <span style={{ fontSize: 10, color: m.inBLR ? 'var(--lc-mid)' : 'var(--lc-dim)', fontWeight: 500 }}>
+                          <span className="lc-meta" style={{ fontSize: 10, color: m.inBLR ? 'var(--lc-mid)' : 'var(--lc-dim)', fontWeight: 500 }}>
                             {m.inBLR ? 'IN BLR' : 'NOT IN BLR'}
                           </span>
                         </>
@@ -720,7 +736,7 @@ const Leads = () => {
                       {lead.moveInDate && (
                         <>
                           <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <span style={{ fontSize: 10, color: 'var(--lc-mid)', fontWeight: 500 }}>
+                          <span className="lc-meta" style={{ fontSize: 10, color: 'var(--lc-mid)', fontWeight: 500 }}>
                             {lead.moveInDate}
                           </span>
                         </>
@@ -731,7 +747,7 @@ const Leads = () => {
                           <span style={{ color: 'var(--lc-line2)' }}>|</span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                             <MapPin size={9} color="var(--lc-dim)" />
-                            <span style={{ fontSize: 10, color: 'var(--lc-dim)', fontWeight: 500 }}>{lead.preferredLocation}</span>
+                            <span className="lc-meta" style={{ fontSize: 10, color: 'var(--lc-dim)', fontWeight: 500 }}>{lead.preferredLocation}</span>
                           </div>
                         </>
                       )}
@@ -753,18 +769,18 @@ const Leads = () => {
                   </div>
 
                   {/* Quick actions on collapsed */}
-                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2 }}>
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2, minWidth: 140, alignItems: 'flex-end' }}>
                     
-                    {/* Small Progress Bar */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, width: '100%' }}>
-                      <div style={{ flex: 1, height: 4, background: 'var(--lc-bg3)', borderRadius: 2, overflow: 'hidden' }}>
+                    {/* Keep progress bar on the top row */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, width: '100%' }}>
+                      <div style={{ width: 44, height: 4, background: 'var(--lc-bg3)', borderRadius: 2, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${progress}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
                       </div>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: progressColor, fontFamily: 'var(--lc-mono)', textAlign: 'right', minWidth: 20 }}>{progress}%</span>
+                      <span className="lc-progress-pct" style={{ fontSize: 9, fontWeight: 700, color: progressColor, fontFamily: 'var(--lc-mono)', textAlign: 'right', minWidth: 20 }}>{progress}%</span>
                     </div>
 
                     {/* Action icons row */}
-                    <div style={{ display: 'flex', gap: 4 }}>
+                    <div className="lc-actions-row" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <button 
                         onClick={(e) => { e.stopPropagation(); setExpandedId(lead.id); }} 
                         style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
@@ -794,6 +810,11 @@ const Leads = () => {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                    </div>
+                    <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
+                      <span className="lc-timestamp" style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', whiteSpace: 'nowrap' }}>
+                        {createdAtStamp}
+                      </span>
                     </div>
                   </div>
                 </div>
