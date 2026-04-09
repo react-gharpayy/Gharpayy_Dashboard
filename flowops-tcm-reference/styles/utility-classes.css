@@ -1,0 +1,60 @@
+/**
+ * Utility Classes used by Flow Ops & TCM components.
+ * Add these to your main CSS file inside @layer utilities { ... }
+ * 
+ * Prerequisites: Tailwind CSS + the CSS variables from css-variables.css
+ */
+
+/* Glass morphism card */
+.glass-card {
+  @apply bg-card/80 backdrop-blur-sm border border-border/50 rounded-lg;
+}
+
+/* Metric card glow effects */
+.metric-glow-blue {
+  box-shadow: 0 0 20px -5px hsl(var(--flow-ops) / 0.3);
+}
+.metric-glow-green {
+  box-shadow: 0 0 20px -5px hsl(var(--tcm) / 0.3);
+}
+.metric-glow-amber {
+  box-shadow: 0 0 20px -5px hsl(var(--hr) / 0.3);
+}
+
+/* Role text colors */
+.text-role-flow {
+  color: hsl(var(--flow-ops));
+}
+.text-role-tcm {
+  color: hsl(var(--tcm));
+}
+.text-role-hr {
+  color: hsl(var(--hr));
+}
+
+/* Role background colors */
+.bg-role-flow {
+  background-color: hsl(var(--flow-ops));
+}
+.bg-role-tcm {
+  background-color: hsl(var(--tcm));
+}
+.bg-role-hr {
+  background-color: hsl(var(--hr));
+}
+
+/* ---- Base styles to also include ---- */
+/* Add inside @layer base { } */
+
+/*
+* {
+  @apply border-border;
+}
+body {
+  @apply bg-background text-foreground;
+  font-family: var(--font-body);
+}
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+*/

@@ -12,9 +12,9 @@ import { formatUserLabel } from '@/lib/userDisplay';
 
 const salesItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/Tours', icon: CalendarCheck, label: 'Tours' },
   { to: '/leads', icon: Users, label: 'Leads' },
   { to: '/pipeline', icon: Kanban, label: 'Pipeline' },
-  { to: '/visits', icon: CalendarCheck, label: 'Tours' },
   { to: '/conversations', icon: MessageSquare, label: 'Messages' },
   { to: '/bookings', icon: Receipt, label: 'Bookings' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },

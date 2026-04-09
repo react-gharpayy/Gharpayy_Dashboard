@@ -1,0 +1,70 @@
+/**
+ * CSS Custom Properties (Dark Theme)
+ * Add these to your :root {} in your main CSS file.
+ * These are required for the Flow Ops & TCM components to render correctly.
+ */
+
+:root {
+  /* ---- Base Theme ---- */
+  --background: 220 20% 7%;
+  --foreground: 210 20% 92%;
+
+  --card: 220 18% 10%;
+  --card-foreground: 210 20% 92%;
+
+  --popover: 220 18% 12%;
+  --popover-foreground: 210 20% 92%;
+
+  --primary: 217 91% 60%;
+  --primary-foreground: 220 20% 7%;
+
+  --secondary: 220 16% 16%;
+  --secondary-foreground: 210 20% 80%;
+
+  --muted: 220 14% 14%;
+  --muted-foreground: 215 12% 50%;
+
+  --accent: 220 16% 18%;
+  --accent-foreground: 210 20% 92%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 210 40% 98%;
+
+  --border: 220 14% 16%;
+  --input: 220 14% 16%;
+  --ring: 217 91% 60%;
+
+  --radius: 0.5rem;
+
+  /* ---- Role Colors (CRITICAL for FlowOps/TCM) ---- */
+  --flow-ops: 217 91% 60%;          /* Blue */
+  --flow-ops-foreground: 220 20% 7%;
+  --tcm: 152 69% 45%;               /* Green */
+  --tcm-foreground: 220 20% 7%;
+  --hr: 38 92% 50%;                 /* Amber */
+  --hr-foreground: 220 20% 7%;
+
+  /* ---- Status Colors ---- */
+  --success: 152 69% 45%;
+  --warning: 38 92% 50%;
+  --danger: 0 72% 51%;
+
+  /* ---- Surface Layers ---- */
+  --surface-1: 220 18% 10%;
+  --surface-2: 220 16% 13%;
+  --surface-3: 220 14% 16%;
+
+  /* ---- Sidebar ---- */
+  --sidebar-background: 220 20% 5%;
+  --sidebar-foreground: 210 20% 70%;
+  --sidebar-primary: 217 91% 60%;
+  --sidebar-primary-foreground: 220 20% 7%;
+  --sidebar-accent: 220 16% 12%;
+  --sidebar-accent-foreground: 210 20% 92%;
+  --sidebar-border: 220 14% 12%;
+  --sidebar-ring: 217 91% 60%;
+
+  /* ---- Fonts ---- */
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+}

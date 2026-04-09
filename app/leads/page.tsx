@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import AddLeadDialog from '@/components/AddLeadDialog';
 import EditLeadDialog from '@/components/EditLeadDialog';
-import { useLeadsPaginated, useOfficeZones, usePipelineStages, type LeadsQueryFilters } from '@/hooks/useCrmData';
+import { useLeadsPaginated, useOfficeZones, usePipelineStages, useCreateVisit, useProperties, type LeadsQueryFilters } from '@/hooks/useCrmData';
 import { useBulkUpdateLeads, useDeleteLeads } from '@/hooks/useLeadDetails';
 import { useUpdateLead, useAgents, type LeadWithRelations } from '@/hooks/useCrmData';
 import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
@@ -21,6 +21,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -95,6 +97,11 @@ function computeFieldsMissing(lead: LeadWithRelations) {
   return fields.filter(f => !f).length;
 }
 
+function objectIdLike() {
+  const seed = `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+  return seed.padEnd(24, '0').slice(0, 24);
+}
+
 const Leads = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSource, setFilterSource] = useState<string>('all');
@@ -116,6 +123,20 @@ const Leads = () => {
   const [updatingStageLeadId, setUpdatingStageLeadId] = useState<string | null>(null);
   const [updatingStageTarget, setUpdatingStageTarget] = useState<{ leadId: string; stageKey: string } | null>(null);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleLeadId, setScheduleLeadId] = useState('');
+  const [scheduleLeadName, setScheduleLeadName] = useState('');
+  const [schedulePhone, setSchedulePhone] = useState('');
+  const [schedulePropertyName, setSchedulePropertyName] = useState('');
+  const [scheduleZoneId, setScheduleZoneId] = useState('');
+  const [schedulePendingZoneName, setSchedulePendingZoneName] = useState('');
+  const [scheduleTourDate, setScheduleTourDate] = useState(new Date().toISOString().split('T')[0]);
+  const [scheduleTourTime, setScheduleTourTime] = useState('11:00');
+  const [scheduleTourMode, setScheduleTourMode] = useState<'physical' | 'virtual'>('physical');
+  const [scheduleAssignedTo, setScheduleAssignedTo] = useState('');
+  const [scheduleAssignedSearch, setScheduleAssignedSearch] = useState('');
+  const [showAssignedOptions, setShowAssignedOptions] = useState(false);
+  const [scheduleBudget, setScheduleBudget] = useState('12000');
 
   const hasValidCustomRange = (() => {
     if (!fromDate || !toDate) return false;
@@ -192,6 +213,7 @@ const Leads = () => {
   const subtitleCount = `${totalLeads} leads found`;
   const { data: members } = useAgents();
   const { data: officeZones } = useOfficeZones();
+  const { data: properties } = useProperties();
   const { data: pipelineStagesData } = usePipelineStages();
   const pipelineStages = (pipelineStagesData && pipelineStagesData.length > 0)
     ? pipelineStagesData
@@ -199,8 +221,26 @@ const Leads = () => {
   const bulkUpdate = useBulkUpdateLeads();
   const deleteLeads = useDeleteLeads();
   const updateLead = useUpdateLead();
+  const createVisit = useCreateVisit();
   const { user } = useAuth();
   const canManageLeadAssignments = ['super_admin', 'manager', 'admin', 'member'].includes(user?.role || '');
+
+  useEffect(() => {
+    if (!scheduleAssignedTo) return;
+    const selected = (members || []).find((m: any) => String(m.id || m._id || '') === scheduleAssignedTo) as any;
+    if (selected) {
+      setScheduleAssignedSearch(String(selected.name || selected.fullName || ''));
+    }
+  }, [scheduleAssignedTo, members]);
+
+  useEffect(() => {
+    if (!schedulePendingZoneName || !officeZones || officeZones.length === 0) return;
+    const zone = officeZones.find((z: any) => String(z.name || '').toLowerCase() === schedulePendingZoneName.toLowerCase());
+    if (zone) {
+      setScheduleZoneId(String(zone._id || zone.id || ''));
+      setSchedulePendingZoneName('');
+    }
+  }, [schedulePendingZoneName, officeZones]);
 
   const filtered = (leads || [])
     .filter(l => {
@@ -284,6 +324,99 @@ const Leads = () => {
     a.href = url;
     a.download = 'leads-export.csv';
     a.click();
+  };
+
+  const openScheduleFromLead = (lead: LeadWithRelations, zoneName: string) => {
+    setScheduleLeadId(lead.id);
+    setScheduleLeadName(lead.name || '');
+    setSchedulePhone(lead.phone || '');
+    setSchedulePropertyName('');
+    setScheduleTourDate(new Date().toISOString().split('T')[0]);
+    setScheduleTourTime('11:00');
+    setScheduleTourMode('physical');
+    setScheduleAssignedTo('');
+    setScheduleAssignedSearch('');
+    setShowAssignedOptions(false);
+    setScheduleBudget('12000');
+
+    const matchedZone = (officeZones || []).find((z: any) => String(z.name || '').toLowerCase() === String(zoneName || '').toLowerCase());
+    if (matchedZone) {
+      setScheduleZoneId(String(matchedZone._id || matchedZone.id || ''));
+      setSchedulePendingZoneName('');
+    } else {
+      setScheduleZoneId(String((officeZones || [])[0]?._id || (officeZones || [])[0]?.id || ''));
+      setSchedulePendingZoneName(String(zoneName || ''));
+    }
+
+    setScheduleOpen(true);
+  };
+
+  const handleScheduleTourFromLead = async () => {
+    if (!scheduleLeadId || !schedulePropertyName.trim() || !scheduleZoneId || !scheduleTourDate || !scheduleTourTime || !scheduleAssignedTo) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+
+    const assignedMember = (members || []).find((m: any) => String(m.id || m._id || '') === scheduleAssignedTo) as any;
+    const zone = (officeZones || []).find((z: any) => String(z._id || z.id || '') === scheduleZoneId) as any;
+    if (!assignedMember || !zone) {
+      toast.error('Invalid zone or assigned TCM member');
+      return;
+    }
+
+    const selectedLeadAny = (leads || []).find((l: any) => String(l.id || l._id) === scheduleLeadId) as any;
+    const fallbackPropertyId =
+      String((properties || [])[0]?.id || (properties || [])[0]?._id || '') ||
+      String(selectedLeadAny?.properties?.id || selectedLeadAny?.properties?._id || '') ||
+      String(selectedLeadAny?.propertyId || '') ||
+      objectIdLike();
+
+    try {
+      const scheduledAt = new Date(`${scheduleTourDate}T${scheduleTourTime}:00`);
+      await createVisit.mutateAsync({
+        leadId: scheduleLeadId,
+        propertyId: fallbackPropertyId,
+        assignedStaffId: String(assignedMember.id || assignedMember._id || ''),
+        scheduledAt: scheduledAt.toISOString(),
+        lead_id: scheduleLeadId,
+        property_id: fallbackPropertyId,
+        assigned_staff_id: String(assignedMember.id || assignedMember._id || ''),
+        scheduled_at: scheduledAt.toISOString(),
+        notes: `tour_mode:${scheduleTourMode}; zone:${zone.name}; budget:${Number(scheduleBudget) || 0}; scheduled_by:${user?.fullName || user?.username || 'system'}; scheduled_by_id:${String(user?.id || '')}; assigned_to:${assignedMember.name || assignedMember.fullName || ''}; assigned_to_id:${String(assignedMember.id || assignedMember._id || '')}; typed_property:${schedulePropertyName.trim()}`,
+        phone: schedulePhone,
+      });
+
+      toast.success('Tour scheduled successfully');
+      setScheduleOpen(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to schedule tour');
+    }
+  };
+
+  const memberOptions = (members || [])
+    .map((member: any) => ({
+      id: String(member.id || member._id || ''),
+      name: String(member.name || member.fullName || '').trim(),
+    }))
+    .filter((member: { id: string; name: string }) => member.id && member.name);
+
+  const filteredMemberOptions = (() => {
+    const q = scheduleAssignedSearch.trim().toLowerCase();
+    if (!q) return memberOptions.slice(0, 12);
+    return memberOptions.filter((member) => member.name.toLowerCase().includes(q)).slice(0, 20);
+  })();
+
+  const handleAssignedSearchChange = (nextValue: string) => {
+    setScheduleAssignedSearch(nextValue);
+    const matched = memberOptions.find((member) => member.name.toLowerCase() === nextValue.trim().toLowerCase());
+    setScheduleAssignedTo(matched?.id || '');
+    setShowAssignedOptions(true);
+  };
+
+  const handleAssignedSelect = (member: { id: string; name: string }) => {
+    setScheduleAssignedTo(member.id);
+    setScheduleAssignedSearch(member.name);
+    setShowAssignedOptions(false);
   };
 
   const changePage = (nextPage: number) => {
@@ -769,7 +902,7 @@ const Leads = () => {
                   </div>
 
                   {/* Quick actions on collapsed */}
-                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2, minWidth: 140, alignItems: 'flex-end' }}>
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2, alignItems: 'flex-end' }}>
                     
                     {/* Keep progress bar on the top row */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, width: '100%' }}>
@@ -777,10 +910,19 @@ const Leads = () => {
                         <div style={{ height: '100%', width: `${progress}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
                       </div>
                       <span className="lc-progress-pct" style={{ fontSize: 9, fontWeight: 700, color: progressColor, fontFamily: 'var(--lc-mono)', textAlign: 'right', minWidth: 20 }}>{progress}%</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openScheduleFromLead(lead, m.zone || ''); }}
+                        className="inline-flex items-center gap-1 rounded-md border border-[var(--lc-line)] bg-[var(--lc-bg2)] px-2 py-1 text-[9px] font-semibold text-[var(--lc-mid)] hover:bg-[var(--lc-bg3)]"
+                        title="Tour"
+                      >
+                        <CalendarDays size={10} />
+                        Tour
+                      </button>
                     </div>
 
                     {/* Action icons row */}
-                    <div className="lc-actions-row" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div className="lc-actions-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, flexWrap: 'nowrap' }}>
                       <button 
                         onClick={(e) => { e.stopPropagation(); setExpandedId(lead.id); }} 
                         style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
@@ -978,7 +1120,16 @@ const Leads = () => {
                   {/* Right side — ID + action icons */}
                   <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0, paddingTop: 2 }}>
                     <span style={{ fontSize: 9, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)' }}>L-{lead.id.slice(-6).toUpperCase()}</span>
-                    <div style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openScheduleFromLead(lead, m.zone || ''); }}
+                        className="inline-flex items-center gap-1 rounded-md border border-[var(--lc-line)] bg-[var(--lc-bg2)] px-2 py-1 text-[9px] font-semibold text-[var(--lc-mid)] hover:bg-[var(--lc-bg3)]"
+                        title="Tour"
+                      >
+                        <CalendarDays size={10} />
+                        Tour
+                      </button>
                       <button 
                         onClick={(e) => { e.stopPropagation(); setExpandedId(''); }} 
                         style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
@@ -1233,6 +1384,107 @@ const Leads = () => {
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
       />
+
+      {/* Schedule Tour Dialog */}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Schedule Tour</DialogTitle>
+            <DialogDescription>Create a tour assignment without leaving Leads.</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Lead</Label>
+              <Input value={scheduleLeadName} readOnly className="h-8 text-xs bg-muted/40" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Phone Number</Label>
+              <Input
+                value={schedulePhone}
+                onChange={(e) => setSchedulePhone(e.target.value)}
+                placeholder="Enter phone number"
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs">Property</Label>
+              <Input
+                value={schedulePropertyName}
+                onChange={(e) => setSchedulePropertyName(e.target.value)}
+                placeholder="Type property name"
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Zone</Label>
+              <select
+                value={scheduleZoneId}
+                onChange={(e) => setScheduleZoneId(e.target.value)}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+              >
+                {(officeZones || []).map((zone: any) => (
+                  <option key={String(zone._id || zone.id)} value={String(zone._id || zone.id)}>{String(zone.name || '')}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Assign To (TCM)</Label>
+              <div className="relative">
+                <Input
+                  value={scheduleAssignedSearch}
+                  onChange={(e) => handleAssignedSearchChange(e.target.value)}
+                  onFocus={() => setShowAssignedOptions(true)}
+                  onBlur={() => setTimeout(() => setShowAssignedOptions(false), 120)}
+                  placeholder="Type member name..."
+                  className="h-8 text-xs"
+                />
+                {showAssignedOptions && filteredMemberOptions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-50 max-h-44 overflow-auto rounded-md border border-border bg-popover p-1 shadow-md">
+                    {filteredMemberOptions.map((member) => (
+                      <button
+                        key={member.id}
+                        type="button"
+                        className="w-full rounded-sm px-2 py-1.5 text-left text-xs text-popover-foreground hover:bg-accent/20"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => handleAssignedSelect(member)}
+                      >
+                        {member.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tour Date</Label>
+              <Input type="date" value={scheduleTourDate} onChange={(e) => setScheduleTourDate(e.target.value)} className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tour Time</Label>
+              <Input type="time" value={scheduleTourTime} onChange={(e) => setScheduleTourTime(e.target.value)} className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tour Mode</Label>
+              <select value={scheduleTourMode} onChange={(e) => setScheduleTourMode(e.target.value as 'physical' | 'virtual')} className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs">
+                <option value="physical">Physical</option>
+                <option value="virtual">Virtual</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Budget</Label>
+              <Input type="number" value={scheduleBudget} onChange={(e) => setScheduleBudget(e.target.value)} className="h-8 text-xs" />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleOpen(false)}>Cancel</Button>
+            <Button onClick={handleScheduleTourFromLead} disabled={createVisit.isPending}>
+              {createVisit.isPending ? 'Scheduling...' : 'Schedule'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 };

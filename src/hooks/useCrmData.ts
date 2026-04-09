@@ -106,6 +106,42 @@ export const useLeadsPaginated = (page = 0, pageSize = 50, filters?: LeadsQueryF
     staleTime: 30000, // 30s cache before refetch
   });
 
+// Leads (all visible for current user) - walks paginated API to collect full dataset.
+export const useAllVisibleLeads = () =>
+  useQuery({
+    queryKey: ['leads-all-visible'],
+    queryFn: async () => {
+      const pageSize = 100;
+      let skip = 0;
+      let total = Number.POSITIVE_INFINITY;
+      const all: LeadWithRelations[] = [];
+
+      while (skip < total) {
+        const params = new URLSearchParams();
+        params.set('skip', String(skip));
+        params.set('limit', String(pageSize));
+        params.set('sort', 'newest');
+
+        const res = await fetch(`/api/leads?${params.toString()}`);
+        if (!res.ok) throw new Error('Failed to fetch complete leads list');
+
+        const data = await res.json() as { leads?: LeadWithRelations[]; total?: number };
+        const batch = data?.leads || [];
+        const serverTotal = typeof data?.total === 'number' ? data.total : skip + batch.length;
+        total = serverTotal;
+
+        all.push(...batch);
+
+        if (batch.length === 0 || batch.length < pageSize) break;
+        skip += batch.length;
+      }
+
+      const deduped = Array.from(new Map(all.map((lead) => [lead.id, lead])).values());
+      return deduped;
+    },
+    staleTime: 30000,
+  });
+
 // Leads (infinite) - progressive pagination for long lists
 export const useLeadsInfinite = (pageSize = 100) =>
   useInfiniteQuery({
