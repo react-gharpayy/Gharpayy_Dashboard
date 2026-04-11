@@ -986,60 +986,67 @@ const Leads = () => {
 
                   {/* Quick actions on collapsed */}
                   <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2, alignItems: 'flex-end' }}>
-                    
+
                     {/* Keep progress bar on the top row */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, width: '100%' }}>
-                      <div style={{ width: 44, height: 4, background: 'var(--lc-bg3)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, width: '100%', flexWrap: 'wrap' }}>
+                      <div style={{ width: 40, height: 4, background: 'var(--lc-bg3)', borderRadius: 2, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${progress}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
                       </div>
-                      <span className="lc-progress-pct" style={{ fontSize: 9, fontWeight: 700, color: progressColor, fontFamily: 'var(--lc-mono)', textAlign: 'right', minWidth: 20 }}>{progress}%</span>
+                      <span className="lc-progress-pct" style={{ fontSize: 8.5, fontWeight: 700, color: progressColor, fontFamily: 'var(--lc-mono)', textAlign: 'right', minWidth: 18 }}>{progress}%</span>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); openScheduleFromLead(lead, m.zone || ''); }}
-                        className="inline-flex items-center gap-1 rounded-md border border-[var(--lc-line)] bg-[var(--lc-bg2)] px-2 py-1 text-[9px] font-semibold text-[var(--lc-mid)] hover:bg-[var(--lc-bg3)]"
+                        className="inline-flex items-center gap-1 rounded-md border border-[var(--lc-line)] bg-[var(--lc-bg2)] px-1.5 py-0.5 text-[8.5px] font-semibold text-[var(--lc-mid)] hover:bg-[var(--lc-bg3)]"
                         title="Tour"
                       >
-                        <CalendarDays size={10} />
+                        <CalendarDays size={9} />
                         Tour
+                      </button>
+                      <a href={`tel:${lead.phone}`} style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex' }} title="Call">
+                        <PhoneCall size={10} color="var(--lc-mid)" />
+                      </a>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setExpandedId(lead.id); }} 
+                        style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
+                        title="Expand"
+                      >
+                        <ChevronDown size={10} color="var(--lc-mid)" />
                       </button>
                     </div>
 
-                    {/* Action icons row */}
-                    <div className="lc-actions-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, flexWrap: 'nowrap' }}>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setExpandedId(lead.id); }} 
-                        style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
-                        title="Expand"
-                      >
-                        <ChevronDown size={12} color="var(--lc-mid)" />
-                      </button>
-                      <a href={`tel:${lead.phone}`} style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex' }} title="Call">
-                        <PhoneCall size={12} color="var(--lc-mid)" />
-                      </a>
+                    {/* Lower row: WhatsApp, more options, and timestamp */}
+                    <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
+                      <span className="lc-timestamp" style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', whiteSpace: 'nowrap' }}>
+                        {createdAtStamp}
+                      </span>
                       <button 
                         onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`); toast.success('WhatsApp link copied!'); }}
-                        style={{ padding: 5, borderRadius: 6, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }} 
+                        style={{ padding: 4, borderRadius: 5, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }} 
                         title="Copy WhatsApp API"
                       >
-                        <MessageCircle size={12} color="#22c55e" />
+                        <MessageCircle size={10} color="#22c55e" />
                       </button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} title="More options">
-                            <MoreVertical size={12} color="var(--lc-mid)" />
+                          <button style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} title="More options">
+                            <MoreVertical size={10} color="var(--lc-mid)" />
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => { setSelectedLeadForEdit(lead); setEditDialogOpen(true); }}>
                             Edit Lead
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="font-mono text-[10px] text-muted-foreground cursor-pointer"
+                            onSelect={() => {
+                              navigator.clipboard.writeText(`L-${lead.id.slice(-6).toUpperCase()}`);
+                              toast.success('Lead ID copied!');
+                            }}
+                          >
+                            L-{lead.id.slice(-6).toUpperCase()}
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </div>
-                    <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
-                      <span className="lc-timestamp" style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', whiteSpace: 'nowrap' }}>
-                        {createdAtStamp}
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -1105,7 +1112,7 @@ const Leads = () => {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {/* Row 1: Name + Badges */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap', paddingBottom: 4 }}>
-                        <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--lc-hi)', margin: 0, fontFamily: 'var(--lc-sans)', paddingRight: 2 }}>{lead.name}</h3>
+                        <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-hi)', margin: 0, fontFamily: 'var(--lc-sans)', paddingRight: 2 }}>{lead.name}</h3>
                         
                         {m.need && (
                           <>
@@ -1140,7 +1147,7 @@ const Leads = () => {
 
                       {/* Row 2: Phone + Budget + Extended Info */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 11.5, color: 'var(--lc-mid)', fontFamily: 'var(--lc-mono)', fontWeight: 600 }}>{lead.phone}</span>
+                        <span style={{ fontSize: 11, color: 'var(--lc-mid)', fontFamily: 'var(--lc-mono)', fontWeight: 600 }}>{lead.phone}</span>
 
                         {budgetDisplay && (
                           <>
@@ -1200,49 +1207,67 @@ const Leads = () => {
                     </div>
                   </div>
 
-                  {/* Right side — ID + action icons */}
-                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0, paddingTop: 2 }}>
-                    <span style={{ fontSize: 9, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)' }}>L-{lead.id.slice(-6).toUpperCase()}</span>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', alignItems: 'center' }}>
+                  {/* Right side — same compact layout as collapsed */}
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2, alignItems: 'flex-end' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, width: '100%', flexWrap: 'wrap' }}>
+                      <div style={{ width: 40, height: 4, background: 'var(--lc-bg3)', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${progress}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
+                      </div>
+                      <span className="lc-progress-pct" style={{ fontSize: 8.5, fontWeight: 700, color: progressColor, fontFamily: 'var(--lc-mono)', textAlign: 'right', minWidth: 18 }}>{progress}%</span>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); openScheduleFromLead(lead, m.zone || ''); }}
-                        className="inline-flex items-center gap-1 rounded-md border border-[var(--lc-line)] bg-[var(--lc-bg2)] px-2 py-1 text-[9px] font-semibold text-[var(--lc-mid)] hover:bg-[var(--lc-bg3)]"
+                        className="inline-flex items-center gap-1 rounded-md border border-[var(--lc-line)] bg-[var(--lc-bg2)] px-1.5 py-0.5 text-[8.5px] font-semibold text-[var(--lc-mid)] hover:bg-[var(--lc-bg3)]"
                         title="Tour"
                       >
-                        <CalendarDays size={10} />
+                        <CalendarDays size={9} />
                         Tour
                       </button>
+                      <a href={`tel:${lead.phone}`} style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex' }} title="Call">
+                        <PhoneCall size={10} color="var(--lc-mid)" />
+                      </a>
                       <button 
                         onClick={(e) => { e.stopPropagation(); setExpandedId(''); }} 
-                        style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
+                        style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
                         title="Collapse"
                       >
-                        <ChevronUp size={12} color="var(--lc-mid)" />
+                        <ChevronUp size={10} color="var(--lc-mid)" />
                       </button>
-                      <a href={`tel:${lead.phone}`} style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex' }} title="Call">
-                        <PhoneCall size={12} color="var(--lc-mid)" />
-                      </a>
+                    </div>
+
+                    <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
+                      <span className="lc-timestamp" style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', whiteSpace: 'nowrap' }}>
+                        {createdAtStamp}
+                      </span>
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
                           navigator.clipboard.writeText(`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`);
                           toast.success('WhatsApp link copied!');
                         }}
-                        style={{ padding: 5, borderRadius: 6, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }} 
+                        style={{ padding: 4, borderRadius: 5, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }} 
                         title="Copy WhatsApp API"
                       >
-                        <MessageCircle size={12} color="#22c55e" />
+                        <MessageCircle size={10} color="#22c55e" />
                       </button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button style={{ padding: 5, borderRadius: 6, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} title="More options">
-                            <MoreVertical size={12} color="var(--lc-mid)" />
+                          <button style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} title="More options">
+                            <MoreVertical size={10} color="var(--lc-mid)" />
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => { setSelectedLeadForEdit(lead); setEditDialogOpen(true); }}>
                             Edit Lead
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="font-mono text-[10px] text-muted-foreground cursor-pointer"
+                            onSelect={() => {
+                              navigator.clipboard.writeText(`L-${lead.id.slice(-6).toUpperCase()}`);
+                              toast.success('Lead ID copied!');
+                            }}
+                          >
+                            L-{lead.id.slice(-6).toUpperCase()}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

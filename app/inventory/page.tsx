@@ -355,8 +355,8 @@ const PropertyCard = ({
             {copiedWA ? <Check size={14} strokeWidth={3} /> : <DollarSign size={14} strokeWidth={3} />}
           </button>
           
-          <button onClick={copyMap} title="Copy Map Location"
-            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedMap ? '#16A34A' : '#000', cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
+          <button onClick={copyMap} title="Copy Map Location" disabled
+            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedMap ? '#16A34A' : '#000', cursor: 'not-allowed', opacity: 0.5, boxShadow: '1px 1px 0 #000' }}>
             {copiedMap ? <Check size={14} strokeWidth={3} /> : <MapPin size={14} strokeWidth={3} />}
           </button>
         </div>
