@@ -7,10 +7,10 @@
  * Room Inventory and Details both hidden initially to save space.
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react'; // Re-build trigger
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { 
-  Search, MapPin, Check, ChevronDown, ChevronUp, 
+import {
+  Search, MapPin, Check, ChevronDown, ChevronUp,
   Calendar, X, LayoutGrid, List, DollarSign, FileText
 } from 'lucide-react';
 import brochureMap from '@/data/brochureMap.json';
@@ -23,7 +23,6 @@ import SearchableSelect from '@/components/SearchableSelect';
 import { toast } from 'sonner';
 import { useRoomStore, type VisitData, type RoomState } from '@/hooks/useInventoryStore';
 
-// ─── TOKENS ──────────────────────────────────────────
 const T = {
   bg0: '#F8F9FA', bg1: '#FFFFFF', bg2: '#FFF6F4', bg3: '#FFFFFF', bg4: '#FEF3C7',
   line: '#FEE2E2', lineH: '#FECACA', lineA: '#FCA5A5',
@@ -32,30 +31,27 @@ const T = {
   gold: '#F97316', goldD: 'rgba(249,115,22,0.08)', goldB: 'rgba(249,115,22,0.28)',
   green: '#16A34A', greenD: 'rgba(22,163,74,0.09)', greenB: 'rgba(22,163,74,0.28)',
   amber: '#D97706', amberD: 'rgba(217,119,6,0.09)', amberB: 'rgba(217,119,6,0.28)',
-  red:   '#DC2626', redD:   'rgba(220,38,38,0.09)',  redB:   'rgba(220,38,38,0.28)',
-  blue:  '#2563EB', blueD:  'rgba(37,99,235,0.09)', blueB:  'rgba(37,99,235,0.28)',
-  violet:'#7C3AED', violetD:'rgba(124,58,237,0.09)',violetB:'rgba(124,58,237,0.28)',
+  red: '#DC2626', redD: 'rgba(220,38,38,0.09)', redB: 'rgba(220,38,38,0.28)',
+  blue: '#2563EB', blueD: 'rgba(37,99,235,0.09)', blueB: 'rgba(37,99,235,0.28)',
+  violet: '#7C3AED', violetD: 'rgba(124,58,237,0.09)', violetB: 'rgba(124,58,237,0.28)',
   sans: "'DM Sans', -apple-system, system-ui, sans-serif",
   mono: "'JetBrains Mono', monospace",
 };
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  LOCKED:      { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',   dot: '#22C55E' },
-  AVAILABLE:   { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',   dot: '#22C55E' },
-  APPROVED:    { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',   dot: '#22C55E' },
-  SOFT_LOCKED: { label: 'Tour Hold', color: '#60A5FA', bg: 'rgba(96,165,250,0.1)',   dot: '#60A5FA' },
-  HARD_LOCKED: { label: 'Pre-Booked',color: '#A78BFA', bg: 'rgba(167,139,250,0.1)',  dot: '#A78BFA' },
-  OCCUPIED:    { label: 'Occupied',   color: '#EF4444', bg: 'rgba(239,68,68,0.1)',   dot: '#EF4444' },
+  LOCKED: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
+  AVAILABLE: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
+  APPROVED: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
+  SOFT_LOCKED: { label: 'Tour Hold', color: '#60A5FA', bg: 'rgba(96,165,250,0.1)', dot: '#60A5FA' },
+  HARD_LOCKED: { label: 'Pre-Booked', color: '#A78BFA', bg: 'rgba(167,139,250,0.1)', dot: '#A78BFA' },
+  OCCUPIED: { label: 'Occupied', color: '#EF4444', bg: 'rgba(239,68,68,0.1)', dot: '#EF4444' },
 };
 
-// ─── HELPERS ─────────────────────────────────────────
 const getMinPrice = (p: PGEntry) => {
   if (p.minPrice && p.minPrice > 5000) return p.minPrice;
   const prices = [p.triplePrice, p.doublePrice, p.singlePrice]
     .filter(v => typeof v === 'number' && v > 5000) as number[];
   if (prices.length > 0) return Math.min(...prices);
-  
-  // Fallback to name match in master data
   const masterMatch = PG_DATA.find(pg => pg.name.toLowerCase() === p.name.toLowerCase());
   if (masterMatch) {
     const mp = [masterMatch.triplePrice, masterMatch.doublePrice, masterMatch.singlePrice]
@@ -70,7 +66,7 @@ const formatPrice = (price: number) => {
   return `from ₹${(price / 1000).toFixed(1)}k/mo`;
 };
 
-const AREAS   = ['All', ...Array.from(new Set(PG_DATA.map(p => p.area).filter(Boolean))).sort()];
+const AREAS = ['All', ...Array.from(new Set(PG_DATA.map(p => p.area).filter(Boolean))).sort()];
 const GENDERS = ['All', 'Boys', 'Girls', 'coed'];
 
 // ─── VISIT SCHEDULING MODAL ──────────────────────────
@@ -113,12 +109,10 @@ const TourModal = ({ pg, onClose, onSchedule }: {
               ))}
             </select>
           </div>
-          
           <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
             <button onClick={() => setTourType('Physical')} style={{ flex: 1, padding: '8px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: `1px solid ${tourType === 'Physical' ? T.blue : T.line}`, background: tourType === 'Physical' ? T.blueD : T.bg3, color: tourType === 'Physical' ? T.blue : T.t1, cursor: 'pointer' }}>Physical Tour</button>
             <button onClick={() => setTourType('Virtual')} style={{ flex: 1, padding: '8px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: `1px solid ${tourType === 'Virtual' ? T.blue : T.line}`, background: tourType === 'Virtual' ? T.blueD : T.bg3, color: tourType === 'Virtual' ? T.blue : T.t1, cursor: 'pointer' }}>Online Tour</button>
           </div>
-
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Customer Name *" style={{ width: '100%', background: T.bg3, border: `1px solid ${T.line}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: T.t0 }} />
           <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone Number" style={{ width: '100%', background: T.bg3, border: `1px solid ${T.line}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: T.t0 }} />
           <div style={{ display: 'flex', gap: 8 }}>
@@ -158,8 +152,8 @@ const RoomRow = ({ room, state }: { room: Room; state: RoomState }) => {
 };
 
 const StatusBtn = ({ label, color, bg, border, active, onClick }: any) => (
-  <button onClick={onClick} style={{ 
-    background: bg, color, padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 800, 
+  <button onClick={onClick} style={{
+    background: bg, color, padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 800,
     border: `1px solid ${active ? color : border}`, cursor: 'pointer', transition: 'all 0.1s ease',
     opacity: active ? 1 : 0.6, transform: active ? 'scale(1.05)' : 'scale(1)',
     display: 'flex', alignItems: 'center', whiteSpace: 'nowrap'
@@ -192,10 +186,10 @@ const PropertyCard = ({
   onScheduleVisit: () => void;
   viewMode?: 'grid' | 'list';
 }) => {
-  const [expanded, setExpanded]           = useState(false);
-  const [roomsExpanded, setRoomsExpanded]   = useState(false);
-  const [copiedWA, setCopiedWA]             = useState(false);
-  const [copiedMap, setCopiedMap]           = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [roomsExpanded, setRoomsExpanded] = useState(false);
+  const [copiedWA, setCopiedWA] = useState(false);
+  const [copiedMap, setCopiedMap] = useState(false);
   const minPrice = getMinPrice(pg);
 
   const genderConfig = pg.gender?.toLowerCase().includes('girl') || pg.gender?.toLowerCase().includes('female')
@@ -206,19 +200,17 @@ const PropertyCard = ({
 
   const copyWA = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const t_was = pg.triplePrice ? Math.round((pg.triplePrice + 2000)/1000) : 15;
-    const t_now = pg.triplePrice ? Math.round(pg.triplePrice/1000) : 13;
-    const d_was = pg.doublePrice ? Math.round((pg.doublePrice + 2000)/1000) : 18;
-    const d_now = pg.doublePrice ? Math.round(pg.doublePrice/1000) : 16;
-    const s_was = pg.singlePrice ? Math.round((pg.singlePrice + 2000)/1000) : 27;
-    const s_now = pg.singlePrice ? Math.round(pg.singlePrice/1000) : 23;
-
+    const t_was = pg.triplePrice ? Math.round((pg.triplePrice + 2000) / 1000) : 15;
+    const t_now = pg.triplePrice ? Math.round(pg.triplePrice / 1000) : 13;
+    const d_was = pg.doublePrice ? Math.round((pg.doublePrice + 2000) / 1000) : 18;
+    const d_now = pg.doublePrice ? Math.round(pg.doublePrice / 1000) : 16;
+    const s_was = pg.singlePrice ? Math.round((pg.singlePrice + 2000) / 1000) : 27;
+    const s_now = pg.singlePrice ? Math.round(pg.singlePrice / 1000) : 23;
     const msg = `⚡️ Welcome to Gharpayy ${pg.name.toUpperCase()} - ${(pg.gender || 'COED').toUpperCase()}! ⚡️ ❤️ We're thrilled you loved our rooms.🚀 *Exclusive Offer Alert:* **2K OFF MONTHLY** \n\n` +
       `🧡Triple Sharing. - ~Was ${t_was}K~, **now only ${t_now}k!*\n` +
       `💛Dual Sharing. - ~Originally ${d_was}K~, **now just ${d_now}K!*\n` +
       `❤️Private rooms - ~Formerly ${s_was}k~, **now specially priced at ${s_now}K!*\n\n` +
       `💥 Act Fast: Lock in your reservation NOW and save 2000+ RS every month on a 12-month stay! *Offer expires in 4 hours. *Prebook* now for just 20k!*🔥   enjoy complimentary good food.`;
-
     navigator.clipboard.writeText(msg);
     setCopiedWA(true);
     setTimeout(() => setCopiedWA(false), 2000);
@@ -240,23 +232,21 @@ const PropertyCard = ({
     toast.success('Location Message copied! 📍');
   };
 
-
-
   const isList = viewMode === 'list';
 
   return (
-    <div className={`gp-card ${isList ? 'inventory-list-card' : ''}`} style={{ 
-      background: T.bg2, 
-      border: `1px solid ${T.line}`, 
-      borderRadius: 12, 
-      overflow: 'hidden', 
+    <div className={`gp-card ${isList ? 'inventory-list-card' : ''}`} style={{
+      background: T.bg2,
+      border: `1px solid ${T.line}`,
+      borderRadius: 12,
+      overflow: 'hidden',
       width: '100%',
       height: 'fit-content',
       transition: 'all 0.2s',
       display: isList ? 'flex' : 'block',
       alignItems: isList ? 'stretch' : undefined,
     }}>
-      
+
       {/* Small Header */}
       <div style={{ padding: '14px 16px', flex: isList ? 1 : 'none', minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
@@ -271,48 +261,46 @@ const PropertyCard = ({
               {pg.landmarks && <span style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, marginLeft: 6, minWidth: 0, wordBreak: 'break-word' }}>• {pg.landmarks}</span>}
             </div>
           </div>
-            {!isList && (
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ color: T.gold, fontWeight: 900, fontSize: 13, textTransform: 'uppercase' }}>{formatPrice(minPrice)}</div>
-                <div style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, fontWeight: 700, marginTop: 2 }}>
-                  {[
-                    pg.triplePrice && pg.triplePrice > 0 ? `T:₹${Math.round(pg.triplePrice/1000)}k` : null,
-                    pg.doublePrice && pg.doublePrice > 0 ? `D:₹${Math.round(pg.doublePrice/1000)}k` : null,
-                    pg.singlePrice && pg.singlePrice > 0 ? `S:₹${Math.round(pg.singlePrice/1000)}k` : null,
-                  ].filter(Boolean).join(' ')}
-                </div>
+          {!isList && (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ color: T.gold, fontWeight: 900, fontSize: 13, textTransform: 'uppercase' }}>{formatPrice(minPrice)}</div>
+              <div style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, fontWeight: 700, marginTop: 2 }}>
+                {[
+                  pg.triplePrice && pg.triplePrice > 0 ? `T:₹${Math.round(pg.triplePrice / 1000)}k` : null,
+                  pg.doublePrice && pg.doublePrice > 0 ? `D:₹${Math.round(pg.doublePrice / 1000)}k` : null,
+                  pg.singlePrice && pg.singlePrice > 0 ? `S:₹${Math.round(pg.singlePrice / 1000)}k` : null,
+                ].filter(Boolean).join(' ')}
               </div>
-            )}
-          </div>
-  
-          {/* Essential Badges Only */}
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 10 }}>
-            <span style={{ background: genderConfig.bg, color: genderConfig.color, border: `1px solid ${genderConfig.border}`, borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>
-              {genderConfig.label.toUpperCase()}
-            </span>
-            {pg.propertyType && <span style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>{pg.propertyType.toUpperCase()}</span>}
-            
-            {/* Inventory Status Badges */}
-            {pgRooms.some(r => r.state.status === 'APPROVED') && <span style={{ background: '#DCFCE7', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>LIVE</span>}
-            {pgRooms.some(r => r.state.status === 'SOFT_LOCKED') && <span style={{ background: '#DBEAFE', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>BOOKED</span>}
-            {pg.managerContact && <span style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>MGR: {pg.managerContact}</span>}
+            </div>
+          )}
+        </div>
+
+        {/* Essential Badges */}
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 10 }}>
+          <span style={{ background: genderConfig.bg, color: genderConfig.color, border: `1px solid ${genderConfig.border}`, borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>
+            {genderConfig.label.toUpperCase()}
+          </span>
+          {pg.propertyType && <span style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>{pg.propertyType.toUpperCase()}</span>}
+          {pgRooms.some(r => r.state.status === 'APPROVED') && <span style={{ background: '#DCFCE7', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>LIVE</span>}
+          {pgRooms.some(r => r.state.status === 'SOFT_LOCKED') && <span style={{ background: '#DBEAFE', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>BOOKED</span>}
+          {pg.managerContact && <span style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>MGR: {pg.managerContact}</span>}
+        </div>
+      </div>
+
+      {isList && (
+        <div className="list-price-panel" style={{ width: 150, display: 'flex', flexDirection: 'column', justifyContent: 'center', borderLeft: `1px solid ${T.line}`, padding: '0 12px', background: '#fff', flexShrink: 0 }}>
+          <div style={{ color: T.gold, fontWeight: 900, fontSize: 13 }}>{formatPrice(minPrice)}</div>
+          <div style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, fontWeight: 700, marginTop: 2 }}>
+            {[
+              pg.triplePrice && pg.triplePrice > 0 ? `T:₹${Math.round(pg.triplePrice / 1000)}k` : null,
+              pg.doublePrice && pg.doublePrice > 0 ? `D:₹${Math.round(pg.doublePrice / 1000)}k` : null,
+              pg.singlePrice && pg.singlePrice > 0 ? `S:₹${Math.round(pg.singlePrice / 1000)}k` : null,
+            ].filter(Boolean).join(' ')}
           </div>
         </div>
-  
-        {isList && (
-          <div className="list-price-panel" style={{ width: 150, display: 'flex', flexDirection: 'column', justifyContent: 'center', borderLeft: `1px solid ${T.line}`, padding: '0 12px', background: '#fff', flexShrink: 0 }}>
-            <div style={{ color: T.gold, fontWeight: 900, fontSize: 13 }}>{formatPrice(minPrice)}</div>
-            <div style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, fontWeight: 700, marginTop: 2 }}>
-              {[
-                pg.triplePrice && pg.triplePrice > 0 ? `T:₹${Math.round(pg.triplePrice/1000)}k` : null,
-                pg.doublePrice && pg.doublePrice > 0 ? `D:₹${Math.round(pg.doublePrice/1000)}k` : null,
-                pg.singlePrice && pg.singlePrice > 0 ? `S:₹${Math.round(pg.singlePrice/1000)}k` : null,
-              ].filter(Boolean).join(' ')}
-            </div>
-          </div>
-        )}
+      )}
 
-      {/* ── ROOMS DRAWER (Collapsible) - Hide in List View initially to keep it clean */}
+      {/* Rooms Drawer */}
       {!isList && (
         <div style={{ borderTop: `1px solid ${T.line}` }}>
           <button onClick={() => setRoomsExpanded(!roomsExpanded)}
@@ -328,11 +316,11 @@ const PropertyCard = ({
         </div>
       )}
 
-      {/* compact Actions */}
-      <div style={{ 
-        padding: '12px 16px', 
-        display: 'flex', 
-        gap: 8, 
+      {/* Actions */}
+      <div style={{
+        padding: '12px 16px',
+        display: 'flex',
+        gap: 8,
         borderTop: isList ? 'none' : `1px solid ${T.line}`,
         borderLeft: isList ? `1px solid ${T.line}` : 'none',
         width: isList ? 300 : '100%',
@@ -344,9 +332,8 @@ const PropertyCard = ({
           style={{ flex: isList ? 'none' : 2, background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: '#000', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
           <Calendar size={13} strokeWidth={3} /> TOUR
         </button>
-        
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => { const url = getBrochureUrl(pg.name); if(url) window.open(url, '_blank'); }} title="Download Brochure"
+          <button onClick={() => { const url = getBrochureUrl(pg.name); if (url) window.open(url, '_blank'); }} title="Download Brochure"
             style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: '#000', cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
             <FileText size={14} strokeWidth={3} />
           </button>
@@ -354,15 +341,13 @@ const PropertyCard = ({
             style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedWA ? '#16A34A' : '#000', cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
             {copiedWA ? <Check size={14} strokeWidth={3} /> : <DollarSign size={14} strokeWidth={3} />}
           </button>
-          
-          <button onClick={copyMap} title="Copy Map Location" disabled
-            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedMap ? '#16A34A' : '#000', cursor: 'not-allowed', opacity: 0.5, boxShadow: '1px 1px 0 #000' }}>
+          <button onClick={copyMap} title="Copy Map Location"
+            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedMap ? '#16A34A' : '#000', cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
             {copiedMap ? <Check size={14} strokeWidth={3} /> : <MapPin size={14} strokeWidth={3} />}
           </button>
         </div>
-
         <button onClick={() => setExpanded(!expanded)}
-          style={{ flex: isList ? 'none' : 1, width: isList ? 'auto' : 'auto', background: 'none', border: 'none', padding: '8px', fontSize: 11, color: T.t2, fontWeight: 600, cursor: 'pointer' }}>
+          style={{ flex: isList ? 'none' : 1, background: 'none', border: 'none', padding: '8px', fontSize: 11, color: T.t2, fontWeight: 600, cursor: 'pointer' }}>
           {expanded ? 'Hide' : 'Details'}
         </button>
       </div>
@@ -394,9 +379,9 @@ const PropertyCard = ({
             </div>
           )}
           {pg.safety && pg.safety.length > 0 && (
-             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {pg.safety.map(s => <span key={s} style={{ background: T.redD, border: `1.5px solid ${T.red}`, color: T.red, fontWeight: 800, padding: '3px 8px', borderRadius: 6, fontSize: 9 }}>🛡️ {s}</span>)}
-             </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {pg.safety.map(s => <span key={s} style={{ background: T.redD, border: `1.5px solid ${T.red}`, color: T.red, fontWeight: 800, padding: '3px 8px', borderRadius: 6, fontSize: 9 }}>🛡️ {s}</span>)}
+            </div>
           )}
         </div>
       )}
@@ -408,12 +393,12 @@ const PropertyCard = ({
 export default function InventoryPage() {
   const [pgDataLive, setPgDataLive] = useState<PGEntry[]>(PG_DATA);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [search, setSearch]             = useState('');
+  const [search, setSearch] = useState('');
   const [areaFilter, setAreaFilter] = useState('All');
   const [cityZoneFilter, setCityZoneFilter] = useState('All');
   const [subAreaFilter, setSubAreaFilter] = useState('All');
-  const [genderFilter, setGenderFilter]   = useState('All');
-  const [statusFilter, setStatusFilter]   = useState<string>('All');
+  const [genderFilter, setGenderFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
   const [areaSidebarSearch, setAreaSidebarSearch] = useState('');
 
   const { snapshot, getRoom, scheduleVisit, getPGStats, getGlobalStats } = useRoomStore();
@@ -423,26 +408,51 @@ export default function InventoryPage() {
   useEffect(() => {
     const sync = async () => {
       setIsSyncing(true);
+      setPgDataLive([]); // clear static data immediately so you know if sheet fails
       try {
-        const data = await fetchLivePGData();
-        if (data && data.length > 0) {
-          setPgDataLive(data);
-          toast.success(`Synced ${data.length} PGs from Sheet`);
+        const [iqData, masterRes] = await Promise.all([
+          fetchLivePGData(),
+          fetch('/api/sheets/master')
+        ]);
+
+        let masterData: PGEntry[] = [];
+        let inactiveNames: Set<string> = new Set();
+
+        if (masterRes.ok) {
+          const masterJson = await masterRes.json();
+          masterData = masterJson.active ?? [];
+          inactiveNames = new Set((masterJson.inactiveNames ?? []).map((n: string) => n.toLowerCase()));
+        }
+
+        // Remove IQ entries whose name matches a red/inactive MASTER row
+        const filteredIQ = iqData.filter(p => !inactiveNames.has(p.name.toLowerCase()));
+
+        const iqNames = new Set(filteredIQ.map(p => p.name.toLowerCase()));
+        const uniqueMaster = masterData.filter(p => !iqNames.has(p.name.toLowerCase()));
+        const combined = [...filteredIQ, ...uniqueMaster];
+        if (combined.length > 0) {
+          setPgDataLive(combined);
+          toast.success(`Synced ${combined.length} PGs from Sheet ✅`);
+        } else {
+          setPgDataLive(PG_DATA); // genuine fallback only if both sources return 0
+          toast.error('Sheet returned 0 PGs — showing cached data');
         }
       } catch (e) {
-        console.error("Sync failed", e);
+        console.error('Sync failed', e);
+        toast.error(`Sync failed: ${String(e)}`);
+        setPgDataLive(PG_DATA);
       }
       setIsSyncing(false);
     };
     sync();
-  }, [toast]);
+  }, []);
 
   const filtered = useMemo(() => {
     return pgDataLive.filter(p => {
       const q = search.toLowerCase();
-      const matchSearch = !q || (p.name||'').toLowerCase().includes(q) || (p.area||'').toLowerCase().includes(q);
+      const matchSearch = !q || (p.name || '').toLowerCase().includes(q) || (p.area || '').toLowerCase().includes(q);
       const normalize = (s: string) => (s || '').toLowerCase().replace(/[\s-]/g, '');
-      
+
       let matchCityZone = true;
       if (cityZoneFilter !== 'All') {
         const pz = getZoneByArea(p.locality || p.area || '').zone;
@@ -464,7 +474,7 @@ export default function InventoryPage() {
       }
 
       const matchGender = genderFilter === 'All' || p.gender?.toLowerCase().includes(genderFilter.toLowerCase().slice(0, 3)) || (genderFilter === 'coed' && p.gender?.toLowerCase().includes('co'));
-      
+
       let matchStatus = true;
       if (statusFilter !== 'All') {
         const pgRooms = getRoomsForPG(p.id);
@@ -482,12 +492,10 @@ export default function InventoryPage() {
     return getGlobalStats(ROOM_MASTER);
   }, [getGlobalStats, snapshot]);
 
-  // All areas from pgDataLive — includes latest sheets data
   const areasWithPGs = useMemo(() => {
-    return Array.from(new Set(pgDataLive.map(p => (p.area || '').trim()).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+    return Array.from(new Set(pgDataLive.map(p => (p.area || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
   }, [pgDataLive]);
 
-  // Sidebar areas filtered by zone + search
   const sidebarAreas = useMemo(() => {
     let list = areasWithPGs;
     if (cityZoneFilter !== 'All') {
@@ -510,12 +518,12 @@ export default function InventoryPage() {
   return (
     <AppLayout title="Inventory OS" subtitle="Platform Truth">
       <div style={{ minHeight: '100vh', background: T.bg0, color: T.t0, fontFamily: T.sans, paddingBottom: 80 }}>
-        
+
         {/* Sticky Filter Bar */}
         <div style={{ background: T.bg1, borderBottom: `1px solid ${T.line}`, position: 'sticky', top: 0, zIndex: 100, padding: '8px 12px' }}>
           <div style={{ maxWidth: 1440, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
 
-            {/* Row 1: Title + Status filters + View toggle + Search */}
+            {/* Row 1 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: 15, fontWeight: 800, margin: 0, whiteSpace: 'nowrap' }}>Inventory OS</h1>
               {isSyncing && (
@@ -524,14 +532,12 @@ export default function InventoryPage() {
                   Syncing...
                 </div>
               )}
-              {/* Status filters */}
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
                 <StatusBtn label="ALL" color={T.t1} bg={T.bg3} border={T.line} active={statusFilter === 'All'} onClick={() => setStatusFilter('All')} />
                 <StatusBtn label={`${stats.live} LIVE`} color={T.green} bg={T.greenD} border={T.greenB} active={statusFilter === 'LIVE'} onClick={() => setStatusFilter('LIVE')} />
                 <StatusBtn label={`${stats.scheduled} SCHED`} color={T.blue} bg={T.blueD} border={T.blueB} active={statusFilter === 'SCHED'} onClick={() => setStatusFilter('SCHED')} />
                 <StatusBtn label={`${stats.occupied} OCC`} color="#EF4444" bg="rgba(239,68,68,0.1)" border="rgba(239,68,68,0.3)" active={statusFilter === 'OCCUPIED'} onClick={() => setStatusFilter('OCCUPIED')} />
               </div>
-              {/* View toggle */}
               <div style={{ display: 'flex', background: T.bg2, borderRadius: 7, padding: 2, border: `1px solid ${T.line}`, flexShrink: 0 }}>
                 <button onClick={() => setViewMode('grid')} style={{ padding: '5px 8px', borderRadius: 5, background: viewMode === 'grid' ? T.bg4 : 'transparent', border: 'none', color: viewMode === 'grid' ? T.t0 : T.t2, cursor: 'pointer' }}>
                   <LayoutGrid size={13} />
@@ -575,8 +581,8 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        {/* Main layout: cards + area sidebar */}
-        <div style={{ maxWidth: 1440, margin: '0 auto', padding: '16px', display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        {/* Main layout */}
+        <div style={{ maxWidth: 1440, margin: '0 auto', padding: '16px', display: 'flex', gap: 16, alignItems: 'flex-start', position: 'relative' }}>
 
           {/* Property Cards */}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -606,16 +612,18 @@ export default function InventoryPage() {
           </div>
 
           {/* Area Sidebar */}
-          <div style={{ width: 200, flexShrink: 0, background: T.bg1, border: `1px solid ${T.line}`, borderRadius: 12, padding: '12px 10px', position: 'sticky', top: 180, maxHeight: 'calc(100vh - 210px)', overflowY: 'auto' }}>
+          <div style={{
+            width: 200, flexShrink: 0, background: T.bg1, border: `1px solid ${T.line}`,
+            borderRadius: 12, padding: '12px 10px', position: 'sticky', top: 180,
+            maxHeight: 'calc(100vh - 210px)', overflowY: 'auto', zIndex: 10
+          }}>
             <div style={{ fontSize: 9, fontWeight: 900, color: T.t2, letterSpacing: '0.08em', marginBottom: 8, fontFamily: T.mono }}>AREAS WITH PGs</div>
-            {/* Search */}
             <div style={{ position: 'relative', marginBottom: 8 }}>
               <Search size={10} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: T.t2 }} />
               <input value={areaSidebarSearch} onChange={e => setAreaSidebarSearch(e.target.value)}
                 placeholder="Search area..."
                 style={{ width: '100%', background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 6, padding: '6px 8px 6px 24px', fontSize: 10, color: T.t0, boxSizing: 'border-box' }} />
             </div>
-            {/* All option */}
             <button onClick={() => setAreaFilter('All')}
               style={{ width: '100%', textAlign: 'left', padding: '6px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800, cursor: 'pointer', marginBottom: 2, border: areaFilter === 'All' ? '1.5px solid #000' : `1px solid transparent`, background: areaFilter === 'All' ? '#111827' : 'transparent', color: areaFilter === 'All' ? '#fff' : T.t1, transition: 'all 0.12s' }}>
               All Areas

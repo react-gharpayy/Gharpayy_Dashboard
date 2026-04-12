@@ -90,7 +90,7 @@ function parseCSV(text: string): string[][] {
 
 function parsePriceString(raw: string, fallbackText?: string) {
   const cleanNum = (s: string) => parseFloat(s.replace(/,/g, ''));
-  
+
   const extract = (patterns: RegExp[], text: string) => {
     for (const re of patterns) {
       const m = text.match(re);
@@ -111,7 +111,7 @@ function parsePriceString(raw: string, fallbackText?: string) {
   const triple = extract(tPatterns, raw) || (fallbackText ? extract(tPatterns, fallbackText) : null);
   const double = extract(dPatterns, raw) || (fallbackText ? extract(dPatterns, fallbackText) : null);
   const single = extract(sPatterns, raw) || (fallbackText ? extract(sPatterns, fallbackText) : null);
-  
+
   const prices = [triple, double, single].filter((p): p is number => p !== null);
   return { triple, double, single, min: prices.length > 0 ? Math.min(...prices) : null };
 }
@@ -124,7 +124,7 @@ function clean(s: string | undefined): string {
   return (s || '').replace(/^"+|"+$/g, '').trim();
 }
 
-const IQ_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1G3l4qX7lWedE4W_3_BoIqreRNP-mA1qH8eIxR0DBk5A/export?format=csv&gid=254520272';
+const IQ_SHEET_URL = '/api/sheets/iq';
 const FIND_PG_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1G3l4qX7lWedE4W_3_BoIqreRNP-mA1qH8eIxR0DBk5A/export?format=csv&gid=1461573087';
 
 export function normalizeArea(a: string): string {
@@ -164,13 +164,8 @@ export function normalizeArea(a: string): string {
 // ─── MAIN EXPORT ─────────────────────────────────────────────────────────────
 
 export async function fetchLivePGData(): Promise<PGEntry[]> {
-  const [resIQ, resFind] = await Promise.all([
-    fetch(IQ_SHEET_URL, { cache: 'no-store' }),
-    fetch(FIND_PG_SHEET_URL, { cache: 'no-store' })
-  ]);
-  
+  const resIQ = await fetch(IQ_SHEET_URL, { cache: 'no-store' });
   const textIQ = resIQ.ok ? await resIQ.text() : '';
-  const textFind = resFind.ok ? await resFind.text() : '';
 
   const results: PGEntry[] = [];
   let idx = 0;
@@ -189,50 +184,50 @@ export async function fetchLivePGData(): Promise<PGEntry[]> {
       const locationMsg = clean(row[4]);
       const { triple, double, single, min } = parsePriceString(priceLowsRaw, waMsg);
 
-      const amenitiesRaw  = clean(row[24]);
-      const safetyRaw     = clean(row[25]);
+      const amenitiesRaw = clean(row[24]);
+      const safetyRaw = clean(row[25]);
       const commonAreasRaw = clean(row[23]);
-      const vibe          = clean(row[21]);
-      const food          = clean(row[22]);
-      const meals         = clean(row[26]);
-      const foodTimings   = clean(row[27]);
-      const utilities     = clean(row[28]);
-      const houseRules    = clean(row[31]);
-      const usp           = clean(row[30]);
-      const deposit       = clean(row[33]) || '1 Month Rent';
-      const minStay       = clean(row[34]) || '3 Months';
-      const walkDist      = clean(row[18]);
-      const propertyType  = clean(row[15]) as 'Premium' | 'Mid' | 'Budget';
-      const targetAud     = clean(row[14]);
-      const mapsLink      = clean(row[12]);
-      const managerName   = clean(row[6]);
+      const vibe = clean(row[21]);
+      const food = clean(row[22]);
+      const meals = clean(row[26]);
+      const foodTimings = clean(row[27]);
+      const utilities = clean(row[28]);
+      const houseRules = clean(row[31]);
+      const usp = clean(row[30]);
+      const deposit = clean(row[33]) || '1 Month Rent';
+      const minStay = clean(row[34]) || '3 Months';
+      const walkDist = clean(row[18]);
+      const propertyType = clean(row[15]) as 'Premium' | 'Mid' | 'Budget';
+      const targetAud = clean(row[14]);
+      const mapsLink = clean(row[12]);
+      const managerName = clean(row[6]);
       const managerContact = clean(row[7]);
-      const rawArea       = clean(row[1]);
-      const area          = normalizeArea(rawArea);
-      const locality      = clean(row[2]);
-      const landmarks     = clean(row[3]);
-      const genderRaw     = clean(row[13]);
+      const rawArea = clean(row[1]);
+      const area = normalizeArea(rawArea);
+      const locality = clean(row[2]);
+      const landmarks = clean(row[3]);
+      const genderRaw = clean(row[13]);
 
       let gender = 'Co-live';
       if (genderRaw.toLowerCase().includes('girl')) gender = 'Girls';
       else if (genderRaw.toLowerCase().includes('boy')) gender = 'Boys';
 
       results.push({
-        id:             2000 + idx,
-        pid:            `GP-IQ${String(idx + 1).padStart(3, '0')}`,
+        id: 2000 + idx,
+        pid: `GP-IQ${String(idx + 1).padStart(3, '0')}`,
         name,
         area,
         locality,
         landmarks,
         mapsLink,
-        triplePrice:    triple,
-        doublePrice:    double,
-        singlePrice:    single,
-        minPrice:       min ?? 0,
+        triplePrice: triple,
+        doublePrice: double,
+        singlePrice: single,
+        minPrice: min ?? 0,
         gender,
-        propertyType:   propertyType || 'Mid',
-        meals:          meals || food || '3 Meals / Day',
-        food:           food,
+        propertyType: propertyType || 'Mid',
+        meals: meals || food || '3 Meals / Day',
+        food: food,
         usp,
         utilities,
         deposit,
@@ -240,96 +235,21 @@ export async function fetchLivePGData(): Promise<PGEntry[]> {
         houseRules,
         vibe,
         walkDist,
-        amenities:      splitList(amenitiesRaw),
-        safety:         splitList(safetyRaw),
-        commonAreas:    splitList(commonAreasRaw),
+        amenities: splitList(amenitiesRaw),
+        safety: splitList(safetyRaw),
+        commonAreas: splitList(commonAreasRaw),
         managerContact,
-        managerName:    managerName || 'Manager',
+        managerName: managerName || 'Manager',
         targetAudience: targetAud || 'Both',
-        source:         'LIVE-SHEET',
-        priority:       '1',
-        availability:   null,
-        waTemplate:     waMsg || locationMsg,
-        subArea:        rawArea || area,
-        exactName:      clean(row[11]),
+        source: 'LIVE-SHEET',
+        priority: '1',
+        availability: null,
+        waTemplate: waMsg || locationMsg,
+        subArea: rawArea || area,
+        exactName: clean(row[11]),
       });
       idx++;
     }
   }
-
-  // --- PARSE FIND MY PG TAB ---
-  if (textFind) {
-    const allRows = parseCSV(textFind);
-    const dataRows = allRows.slice(2);
-    for (const row of dataRows) {
-      if (!row || row.length < 3) continue;
-      const name = clean(row[1]);
-      if (!name || name.toLowerCase().includes('name')) continue;
-
-      const rawArea = clean(row[2]);
-      const area = normalizeArea(rawArea);
-      const locality = clean(row[3]);
-      const genderRaw = clean(row[4]) + ' ' + name;
-      const usp = clean(row[6]);
-      const priceLowsRaw = clean(row[9]);
-      const waMsg = clean(row[11]);
-      const locationMsg = clean(row[13]);
-      const food = clean(row[14]);
-      const mapsLink = clean(row[15]);
-      const exactName = clean(row[16]);
-      const managerContact = clean(row[20]);
-      const managerName = clean(row[21]);
-
-      const { triple, double, single, min } = parsePriceString(priceLowsRaw, waMsg);
-
-      let gender = 'Co-live';
-      if (genderRaw.toLowerCase().includes('girl') || /\bgirls?\b/i.test(genderRaw)) gender = 'Girls';
-      else if (genderRaw.toLowerCase().includes('boy') || /\bboys?\b/i.test(genderRaw)) gender = 'Boys';
-
-      // Avoid duplicates if same exact PG is in both tabs
-      // Check if a PG with same area and similar name exist
-      const isDuplicate = results.some(r => r.area.toLowerCase() === area.toLowerCase() && r.name.toLowerCase() === name.toLowerCase());
-      if (isDuplicate) continue;
-
-      results.push({
-        id:             2000 + idx,
-        pid:            `GP-FIND${String(idx + 1).padStart(3, '0')}`,
-        name,
-        area,
-        locality,
-        landmarks:      '',
-        mapsLink,
-        triplePrice:    triple,
-        doublePrice:    double,
-        singlePrice:    single,
-        minPrice:       min ?? 0,
-        gender,
-        propertyType:   'Mid',
-        meals:          food || '3 Meals / Day',
-        food:           food,
-        usp,
-        utilities:      '',
-        deposit:        '1 Month Rent',
-        minStay:        '3 Months',
-        houseRules:     '',
-        vibe:           '',
-        walkDist:       '',
-        amenities:      [],
-        safety:         [],
-        commonAreas:    [],
-        managerContact,
-        managerName:    managerName || 'Manager',
-        targetAudience: 'Both',
-        source:         'LIVE-SHEET',
-        priority:       '1',
-        availability:   null,
-        waTemplate:     waMsg || locationMsg,
-        subArea:        area,
-        exactName:      exactName,
-      });
-      idx++;
-    }
-  }
-
   return results;
 }
