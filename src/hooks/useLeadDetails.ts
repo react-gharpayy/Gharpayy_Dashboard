@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { broadcastLeadsUpdated } from '@/lib/leadSync';
 
 export const useConversations = (leadId?: string) =>
   useQuery({
@@ -81,6 +82,7 @@ export const useBulkUpdateLeads = () => {
       return res.json();
     },
     onSuccess: () => {
+      broadcastLeadsUpdated();
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['leads-paginated'] });
     },

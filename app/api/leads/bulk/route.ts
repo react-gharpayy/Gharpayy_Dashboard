@@ -3,7 +3,33 @@ import connectToDatabase from '@/lib/mongodb';
 import Lead from '@/models/Lead';
 import User from '@/models/User';
 import LeadActivity from '@/models/LeadActivity';
+import Notification from '@/models/Notification';
 import { getAuthUserFromCookie } from '@/lib/auth';
+
+async function createAssignmentNotification({
+  assigneeId,
+  assignedById,
+  assignedByName,
+  lead,
+}: {
+  assigneeId: string;
+  assignedById: string;
+  assignedByName: string;
+  lead: any;
+}) {
+  await Notification.create({
+    userId: assigneeId,
+    title: 'Lead assigned to you',
+    message: `${lead.name} (${lead.phone}) was assigned by ${assignedByName}`,
+    type: 'lead_assignment_request',
+    actionStatus: 'pending',
+    metadata: {
+      leadId: lead._id.toString(),
+      assignedById,
+      assignedByName,
+    },
+  });
+}
 
 export async function POST(req: Request) {
   try {
@@ -28,14 +54,23 @@ export async function POST(req: Request) {
     await connectToDatabase();
     
     // Transform leads to match MongoDB schema
-    const transformedLeads = leads.map(l => ({
-      ...l,
-      zone: String(l.zone || '').trim(),
-      preferredLocation: l.preferred_location || l.preferredLocation,
-      assignedMemberId: l.assigned_member_id || l.assignedMemberId || (authUser.role === 'member' ? authUser.id : undefined),
-      createdBy: authUser.id,
-      firstResponseTimeMin: l.first_response_time_min || l.firstResponseTimeMin,
-    }));
+    const transformedLeads = leads.map(l => {
+      const resolvedAssignedMemberId = l.assigned_member_id || l.assignedMemberId || (authUser.role === 'member' ? authUser.id : undefined);
+      const isPendingAssignment = Boolean(resolvedAssignedMemberId) && String(resolvedAssignedMemberId) !== String(authUser.id);
+
+      return {
+        ...l,
+        zone: String(l.zone || '').trim(),
+        preferredLocation: l.preferred_location || l.preferredLocation,
+        assignedMemberId: resolvedAssignedMemberId,
+        assignmentStatus: isPendingAssignment ? 'pending' : 'accepted',
+        assignmentRequestedById: isPendingAssignment ? authUser.id : undefined,
+        assignmentRequestedAt: isPendingAssignment ? new Date() : undefined,
+        assignmentAcceptedAt: resolvedAssignedMemberId && !isPendingAssignment ? new Date() : undefined,
+        createdBy: authUser.id,
+        firstResponseTimeMin: l.first_response_time_min || l.firstResponseTimeMin,
+      };
+    });
 
     const result = await Lead.insertMany(transformedLeads);
 
@@ -81,6 +116,13 @@ export async function PATCH(req: Request) {
     }
     if (updates.preferred_location) mappedUpdates.preferredLocation = updates.preferred_location;
 
+    if (authUser.role === 'member' && mappedUpdates.assignedMemberId !== undefined) {
+      return NextResponse.json(
+        { error: 'Members can only pass leads through notification actions' },
+        { status: 403 }
+      );
+    }
+
     // Assignment permission checks
     if (mappedUpdates.assignedMemberId) {
       const member = await User.findOne({ _id: mappedUpdates.assignedMemberId, role: 'member' }).select('_id adminId');
@@ -101,10 +143,46 @@ export async function PATCH(req: Request) {
 
     const leadsToUpdate = await Lead.find(updateScope);
 
-    const result = await Lead.updateMany(
-      updateScope,
-      { $set: mappedUpdates }
-    );
+    let result: { modifiedCount: number } = { modifiedCount: 0 };
+    if (mappedUpdates.assignedMemberId !== undefined) {
+      const mutableEntries = Object.entries(mappedUpdates).filter(([key]) => key !== 'assignedMemberId');
+      const bulkOps = leadsToUpdate.map((oldLead: any) => {
+        const setDoc: Record<string, any> = Object.fromEntries(mutableEntries);
+        setDoc.assignedMemberId = mappedUpdates.assignedMemberId;
+
+        const assigneeChanged = String(oldLead.assignedMemberId || '') !== String(mappedUpdates.assignedMemberId || '');
+        if (assigneeChanged) {
+          if (mappedUpdates.assignedMemberId) {
+            const pendingForAnotherUser = String(mappedUpdates.assignedMemberId) !== String(authUser.id);
+            setDoc.assignmentStatus = pendingForAnotherUser ? 'pending' : 'accepted';
+            setDoc.assignmentRequestedById = authUser.id;
+            setDoc.assignmentRequestedAt = new Date();
+            setDoc.assignmentAcceptedAt = pendingForAnotherUser ? null : new Date();
+          } else {
+            setDoc.assignmentStatus = 'accepted';
+            setDoc.assignmentRequestedById = null;
+            setDoc.assignmentRequestedAt = null;
+            setDoc.assignmentAcceptedAt = null;
+          }
+        }
+
+        return {
+          updateOne: {
+            filter: { _id: oldLead._id },
+            update: { $set: setDoc },
+          },
+        };
+      });
+
+      const writeResult = bulkOps.length ? await Lead.bulkWrite(bulkOps) : { modifiedCount: 0 };
+      result = { modifiedCount: writeResult.modifiedCount || 0 };
+    } else {
+      const updateResult = await Lead.updateMany(
+        updateScope,
+        { $set: mappedUpdates }
+      );
+      result = { modifiedCount: updateResult.modifiedCount };
+    }
 
     try {
       const activityLogs: any[] = [];
@@ -147,6 +225,26 @@ export async function PATCH(req: Request) {
             details: { from: fromName, to: toName },
             createdAt: now
           });
+
+          if (mappedUpdates.assignedMemberId) {
+            activityLogs.push({
+              leadId: oldLead._id.toString(),
+              leadName: oldLead.name,
+              userId: authUser.id,
+              userName: authUser.fullName,
+              userRole: authUser.role,
+              actionType: 'assignment_offered',
+              details: { from: fromName, to: toName },
+              createdAt: now,
+            });
+
+            await createAssignmentNotification({
+              assigneeId: mappedUpdates.assignedMemberId.toString(),
+              assignedById: authUser.id,
+              assignedByName: authUser.fullName,
+              lead: oldLead,
+            });
+          }
         }
       }
       if (activityLogs.length > 0) {

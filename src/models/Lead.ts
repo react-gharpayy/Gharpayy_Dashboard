@@ -9,6 +9,10 @@ export interface ILead extends Document {
   zone: string;
   firstResponseTimeMin?: number;
   assignedMemberId?: mongoose.Types.ObjectId;
+  assignmentStatus?: 'pending' | 'accepted';
+  assignmentRequestedById?: mongoose.Types.ObjectId;
+  assignmentRequestedAt?: Date;
+  assignmentAcceptedAt?: Date;
   createdBy?: mongoose.Types.ObjectId;
   propertyId?: mongoose.Types.ObjectId;
   preferredLocation?: string;
@@ -35,6 +39,10 @@ const LeadSchema: Schema = new Schema(
     zone: { type: String, required: true },
     firstResponseTimeMin: { type: Number },
     assignedMemberId: { type: Schema.Types.ObjectId, ref: 'User' },
+    assignmentStatus: { type: String, enum: ['pending', 'accepted'], default: 'accepted' },
+    assignmentRequestedById: { type: Schema.Types.ObjectId, ref: 'User' },
+    assignmentRequestedAt: { type: Date },
+    assignmentAcceptedAt: { type: Date },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
     propertyId: { type: Schema.Types.ObjectId, ref: 'Property' },
     preferredLocation: { type: String },

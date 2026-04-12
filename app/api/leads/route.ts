@@ -3,6 +3,7 @@ import connectToDatabase from '@/lib/mongodb';
 import Lead from '@/models/Lead';
 import User from '@/models/User';
 import LeadActivity from '@/models/LeadActivity';
+import Notification from '@/models/Notification';
 import { getAuthUserFromCookie } from '@/lib/auth';
 
 function normalizePhone(phone?: string | null) {
@@ -34,6 +35,31 @@ async function validateAgentAssignment(authUser: any, agentId?: string | null) {
   return null;
 }
 
+async function createAssignmentNotification({
+  assigneeId,
+  assignedById,
+  assignedByName,
+  lead,
+}: {
+  assigneeId: string;
+  assignedById: string;
+  assignedByName: string;
+  lead: any;
+}) {
+  await Notification.create({
+    userId: assigneeId,
+    title: 'Lead assigned to you',
+    message: `${lead.name} (${lead.phone}) was assigned by ${assignedByName}`,
+    type: 'lead_assignment_request',
+    actionStatus: 'pending',
+    metadata: {
+      leadId: lead._id.toString(),
+      assignedById,
+      assignedByName,
+    },
+  });
+}
+
 export async function GET(req: Request) {
   try {
     const authUser = await getAuthUserFromCookie();
@@ -58,13 +84,20 @@ export async function GET(req: Request) {
       : { createdAt: sort === 'oldest' ? 1 : -1 };
 
     const query: any = {};
+    const andFilters: any[] = [];
     if (!['super_admin', 'manager', 'admin', 'member'].includes(authUser.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Members can only see leads currently assigned to them
     if (authUser.role === 'member') {
-      query.assignedMemberId = authUser.id;
+      andFilters.push({ assignedMemberId: authUser.id });
+      andFilters.push({
+        $or: [
+          { assignmentStatus: { $exists: false } },
+          { assignmentStatus: { $ne: 'pending' } },
+        ],
+      });
     }
 
     // Optional status filter
@@ -86,6 +119,10 @@ export async function GET(req: Request) {
         { name: { $regex: safe, $options: 'i' } },
         { phone: { $regex: safe, $options: 'i' } },
       ];
+    }
+
+    if (andFilters.length > 0) {
+      query.$and = [...(query.$and || []), ...andFilters];
     }
 
     if (period === 'today') {
@@ -163,6 +200,10 @@ export async function GET(req: Request) {
           ...l.toObject(),
           id: l._id.toString(),
           assignedMemberId: l.assignedMemberId?.toString?.(),
+          assignmentStatus: (l as any).assignmentStatus || 'accepted',
+          assignmentRequestedById: (l as any).assignmentRequestedById?.toString?.(),
+          assignmentRequestedAt: (l as any).assignmentRequestedAt || null,
+          assignmentAcceptedAt: (l as any).assignmentAcceptedAt || null,
           duplicateCount,
           isDuplicate: duplicateCount > 1,
           members: l.assignedMemberId ? userMap.get(l.assignedMemberId.toString()) || null : null,
@@ -219,6 +260,10 @@ export async function GET(req: Request) {
       ...l.toObject(),
       id: l._id.toString(),
       assignedMemberId: l.assignedMemberId?.toString?.(),
+      assignmentStatus: (l as any).assignmentStatus || 'accepted',
+      assignmentRequestedById: (l as any).assignmentRequestedById?.toString?.(),
+      assignmentRequestedAt: (l as any).assignmentRequestedAt || null,
+      assignmentAcceptedAt: (l as any).assignmentAcceptedAt || null,
       duplicateCount: phoneCounts.get(normalizePhone((l as any).phone)) || 0,
       isDuplicate: (phoneCounts.get(normalizePhone((l as any).phone)) || 0) > 1,
       members: l.assignedMemberId ? userMap.get(l.assignedMemberId.toString()) || null : null,
@@ -260,11 +305,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: assignmentError }, { status: 403 });
     }
 
+    const resolvedAssignedMemberId = assignedMemberId || (authUser.role === 'member' ? authUser.id : null);
+    const isPendingAssignment = Boolean(resolvedAssignedMemberId) && String(resolvedAssignedMemberId) !== String(authUser.id);
+
     const leadData = {
       ...body,
       zone: String(body.zone || '').trim(),
       preferredLocation: body.preferred_location || body.preferredLocation,
-      assignedMemberId: assignedMemberId || (authUser.role === 'member' ? authUser.id : null),
+      assignedMemberId: resolvedAssignedMemberId,
+      assignmentStatus: isPendingAssignment ? 'pending' : 'accepted',
+      assignmentRequestedById: isPendingAssignment ? authUser.id : undefined,
+      assignmentRequestedAt: isPendingAssignment ? new Date() : undefined,
+      assignmentAcceptedAt: resolvedAssignedMemberId && !isPendingAssignment ? new Date() : undefined,
       createdBy: authUser.id,
       moveInDate: body.move_in_date || body.moveInDate,
       roomType: body.room_type || body.roomType,
@@ -287,6 +339,29 @@ export async function POST(req: Request) {
         actionType: 'added',
         details: { source: lead.source, status: lead.status }
       });
+
+      if (isPendingAssignment && resolvedAssignedMemberId) {
+        await LeadActivity.create({
+          leadId: lead._id.toString(),
+          leadName: lead.name,
+          userId: authUser.id,
+          userName: authUser.fullName,
+          userRole: authUser.role,
+          actionType: 'assignment_offered',
+          details: {
+            from: authUser.fullName,
+            to: resolvedAssignedMemberId,
+            assignedById: authUser.id,
+          },
+        });
+
+        await createAssignmentNotification({
+          assigneeId: String(resolvedAssignedMemberId),
+          assignedById: authUser.id,
+          assignedByName: authUser.fullName,
+          lead,
+        });
+      }
     } catch (e) { console.error('Failed to log lead creation', e); }
 
     return NextResponse.json(lead, { status: 201 });

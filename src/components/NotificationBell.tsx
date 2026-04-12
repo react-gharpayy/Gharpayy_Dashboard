@@ -2,13 +2,27 @@ import { useState } from 'react';
 import { Bell, Check } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { useNotifications, useMarkNotificationRead, useMarkAllRead } from '@/hooks/useNotifications';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  useNotifications,
+  useMarkNotificationRead,
+  useMarkAllRead,
+  useAcceptLeadAssignment,
+  usePassOnLeadAssignment,
+} from '@/hooks/useNotifications';
+import { useAgents } from '@/hooks/useCrmData';
+import { useAuth } from '@/contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 
 const NotificationBell = () => {
   const { data: notifications } = useNotifications();
+  const { data: members } = useAgents();
+  const { user } = useAuth();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllRead();
+  const acceptAssignment = useAcceptLeadAssignment();
+  const passOnAssignment = usePassOnLeadAssignment();
   const [open, setOpen] = useState(false);
 
   const unread = notifications?.filter(n => !n.is_read).length || 0;
@@ -56,7 +70,23 @@ const NotificationBell = () => {
           <div>
             <p className="text-[10px] font-medium text-muted-foreground px-3 pt-3 pb-1">Today</p>
             {grouped.today.map(n => (
-              <NotifItem key={n.id} n={n} onRead={() => markRead.mutate(n.id)} />
+              <NotifItem
+                key={n.id}
+                n={n}
+                members={members || []}
+                currentUserId={String(user?.id || '')}
+                onRead={() => markRead.mutate(n.id)}
+                onAccept={async () => {
+                  const leadId = n?.metadata?.leadId;
+                  if (!leadId) return;
+                  await acceptAssignment.mutateAsync({ leadId, notificationId: n.id });
+                }}
+                onPassOn={async (targetMemberId) => {
+                  const leadId = n?.metadata?.leadId;
+                  if (!leadId) return;
+                  await passOnAssignment.mutateAsync({ leadId, notificationId: n.id, targetMemberId });
+                }}
+              />
             ))}
           </div>
         )}
@@ -64,7 +94,23 @@ const NotificationBell = () => {
           <div>
             <p className="text-[10px] font-medium text-muted-foreground px-3 pt-3 pb-1">Yesterday</p>
             {grouped.yesterday.map(n => (
-              <NotifItem key={n.id} n={n} onRead={() => markRead.mutate(n.id)} />
+              <NotifItem
+                key={n.id}
+                n={n}
+                members={members || []}
+                currentUserId={String(user?.id || '')}
+                onRead={() => markRead.mutate(n.id)}
+                onAccept={async () => {
+                  const leadId = n?.metadata?.leadId;
+                  if (!leadId) return;
+                  await acceptAssignment.mutateAsync({ leadId, notificationId: n.id });
+                }}
+                onPassOn={async (targetMemberId) => {
+                  const leadId = n?.metadata?.leadId;
+                  if (!leadId) return;
+                  await passOnAssignment.mutateAsync({ leadId, notificationId: n.id, targetMemberId });
+                }}
+              />
             ))}
           </div>
         )}
@@ -72,7 +118,23 @@ const NotificationBell = () => {
           <div>
             <p className="text-[10px] font-medium text-muted-foreground px-3 pt-3 pb-1">Earlier</p>
             {grouped.earlier.map(n => (
-              <NotifItem key={n.id} n={n} onRead={() => markRead.mutate(n.id)} />
+              <NotifItem
+                key={n.id}
+                n={n}
+                members={members || []}
+                currentUserId={String(user?.id || '')}
+                onRead={() => markRead.mutate(n.id)}
+                onAccept={async () => {
+                  const leadId = n?.metadata?.leadId;
+                  if (!leadId) return;
+                  await acceptAssignment.mutateAsync({ leadId, notificationId: n.id });
+                }}
+                onPassOn={async (targetMemberId) => {
+                  const leadId = n?.metadata?.leadId;
+                  if (!leadId) return;
+                  await passOnAssignment.mutateAsync({ leadId, notificationId: n.id, targetMemberId });
+                }}
+              />
             ))}
           </div>
         )}
@@ -81,19 +143,116 @@ const NotificationBell = () => {
   );
 };
 
-function NotifItem({ n, onRead }: { n: any; onRead: () => void }) {
+function NotifItem({
+  n,
+  members,
+  currentUserId,
+  onRead,
+  onAccept,
+  onPassOn,
+}: {
+  n: any;
+  members: any[];
+  currentUserId: string;
+  onRead: () => void;
+  onAccept: () => Promise<void>;
+  onPassOn: (targetMemberId: string) => Promise<void>;
+}) {
+  const [showPassOn, setShowPassOn] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [acting, setActing] = useState(false);
+  const isLeadAssignmentRequest = n.type === 'lead_assignment_request' && n.action_status === 'pending' && Boolean(n?.metadata?.leadId);
+  const passOnCandidates = members.filter((m: any) => String(m.id || m._id || '') !== currentUserId);
+
+  const handleAccept = async () => {
+    try {
+      setActing(true);
+      await onAccept();
+      toast.success('Lead assignment accepted');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to accept assignment');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handlePassOn = async () => {
+    if (!selectedMemberId) {
+      toast.error('Select a member first');
+      return;
+    }
+    try {
+      setActing(true);
+      await onPassOn(selectedMemberId);
+      toast.success('Lead passed on successfully');
+      setShowPassOn(false);
+      setSelectedMemberId('');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to pass on assignment');
+    } finally {
+      setActing(false);
+    }
+  };
+
   return (
-    <button
-      onClick={() => { if (!n.is_read) onRead(); }}
-      className={`w-full text-left px-3 py-2.5 hover:bg-secondary/50 transition-colors flex gap-2.5 ${!n.is_read ? 'bg-accent/5' : ''}`}
+    <div
+      className={`w-full text-left px-3 py-2.5 hover:bg-secondary/50 transition-colors ${!n.is_read ? 'bg-accent/5' : ''}`}
+      onClick={() => {
+        if (!n.is_read) onRead();
+      }}
     >
-      {!n.is_read && <div className="w-1.5 h-1.5 rounded-full bg-accent mt-1.5 shrink-0" />}
-      <div className={!n.is_read ? '' : 'ml-4'}>
+      <div className="flex gap-2.5">
+        {!n.is_read && <div className="w-1.5 h-1.5 rounded-full bg-accent mt-1.5 shrink-0" />}
+        <div className={!n.is_read ? '' : 'ml-4'}>
         <p className="text-xs font-medium text-foreground">{n.title}</p>
         {n.body && <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>}
         <p className="text-[9px] text-muted-foreground mt-1">{formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}</p>
+        </div>
       </div>
-    </button>
+
+      {isLeadAssignmentRequest && (
+        <div className="mt-2 ml-4 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-[10px] px-2" onClick={handleAccept} disabled={acting}>
+              Accept
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[10px] px-2"
+              onClick={() => setShowPassOn((prev) => !prev)}
+              disabled={acting}
+            >
+              Pass On
+            </Button>
+          </div>
+
+          {showPassOn && (
+            <div className="flex gap-2 items-center">
+              <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
+                <SelectTrigger className="h-8 text-[11px]">
+                  <SelectValue placeholder="Select member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {passOnCandidates.map((m: any) => {
+                    const id = String(m.id || m._id || '');
+                    const name = m.name || m.fullName || 'Member';
+                    return (
+                      <SelectItem key={id} value={id}>
+                        {name}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              <Button size="sm" className="h-8 text-[10px] px-2" onClick={handlePassOn} disabled={acting || !selectedMemberId}>
+                Confirm
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

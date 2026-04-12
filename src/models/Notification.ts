@@ -6,6 +6,7 @@ export interface INotification extends Document {
   message: string;
   type: string;
   isRead: boolean;
+  actionStatus?: 'pending' | 'completed';
   metadata?: any;
   createdAt: Date;
   updatedAt: Date;
@@ -18,6 +19,7 @@ const NotificationSchema: Schema = new Schema(
     message: { type: String, required: true },
     type: { type: String, required: true },
     isRead: { type: Boolean, default: false },
+    actionStatus: { type: String, enum: ['pending', 'completed'], default: 'pending' },
     metadata: { type: Schema.Types.Mixed },
   },
   { timestamps: true }

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { broadcastLeadsUpdated } from '@/lib/leadSync';
 
 // Type for lead with joined member and property
 export type LeadWithRelations = {
@@ -27,6 +28,10 @@ export type LeadWithRelations = {
   duplicateCount?: number;
   notes?: string;
   assignedMemberId?: string;
+  assignmentStatus?: 'pending' | 'accepted';
+  assignmentRequestedById?: string;
+  assignmentRequestedAt?: string;
+  assignmentAcceptedAt?: string;
   createdAt: string;
   lastActivityAt: string;
 };
@@ -197,6 +202,7 @@ export const useCreateLead = () => {
       return res.json();
     },
     onSuccess: async () => {
+      broadcastLeadsUpdated();
       await qc.invalidateQueries({ queryKey: ['leads'] });
       await qc.invalidateQueries({ queryKey: ['leads-paginated'] });
       await qc.invalidateQueries({ queryKey: ['leads-infinite'] });
@@ -220,6 +226,7 @@ export const useUpdateLead = () => {
       return res.json();
     },
     onSuccess: async () => {
+      broadcastLeadsUpdated();
       await qc.invalidateQueries({ queryKey: ['leads'] });
       await qc.invalidateQueries({ queryKey: ['leads-paginated'] });
       await qc.invalidateQueries({ queryKey: ['leads-infinite'] });

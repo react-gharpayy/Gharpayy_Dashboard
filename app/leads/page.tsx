@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import AppLayout from '@/components/AppLayout';
 import EditLeadDialog from '@/components/EditLeadDialog';
 import { useLeadsPaginated, useOfficeZones, usePipelineStages, useCreateVisit, useProperties, type LeadsQueryFilters } from '@/hooks/useCrmData';
@@ -27,6 +28,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { T, QUALITY, GEO_TECH_PARKS, FDISPLAY } from '@/lib/leadGeoData';
 import { parseMoveInV2, parseBudgetV2 } from '@/lib/leadParserV2';
+import { LEADS_UPDATED_AT_KEY, getLeadsUpdatedStamp } from '@/lib/leadSync';
 import { ZonePill, BudgetChips, GeoIntelPanel } from '@/components/LeadUIAtoms';
 
 // ─── helpers to map DB lead → card display ────────────────────────
@@ -137,6 +139,7 @@ const Leads = () => {
   const [showAssignedOptions, setShowAssignedOptions] = useState(false);
   const [scheduleBudget, setScheduleBudget] = useState('12000');
   const [isExporting, setIsExporting] = useState(false);
+  const queryClient = useQueryClient();
 
   const hasValidCustomRange = (() => {
     if (!fromDate || !toDate) return false;
@@ -147,6 +150,47 @@ const Leads = () => {
     const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 350);
     return () => clearTimeout(t);
   }, [searchQuery]);
+
+  useEffect(() => {
+    let lastKnownStamp = getLeadsUpdatedStamp();
+
+    const refreshLeads = () => {
+      void queryClient.invalidateQueries({ queryKey: ['leads'] });
+      void queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
+      void queryClient.invalidateQueries({ queryKey: ['leads-infinite'] });
+      void queryClient.refetchQueries({ queryKey: ['leads-paginated'], type: 'active' });
+    };
+
+    const checkForExternalUpdates = () => {
+      const currentStamp = getLeadsUpdatedStamp();
+      if (!currentStamp || currentStamp === lastKnownStamp) return;
+      lastKnownStamp = currentStamp;
+      refreshLeads();
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== LEADS_UPDATED_AT_KEY) return;
+      if (!event.newValue || event.newValue === lastKnownStamp) return;
+      lastKnownStamp = event.newValue;
+      refreshLeads();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkForExternalUpdates();
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', checkForExternalUpdates);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', checkForExternalUpdates);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [queryClient]);
 
   const monthRange = (() => {
     if (!filterMonth) return null;
@@ -493,6 +537,10 @@ const Leads = () => {
 
   const openLeadIntakeInNewTab = () => {
     window.open('/leads/intake', '_blank', 'noopener,noreferrer');
+  };
+
+  const openLeadEditInNewTab = (lead: LeadWithRelations) => {
+    window.open(`/leads/intake?editId=${encodeURIComponent(lead.id)}`, '_blank', 'noopener,noreferrer');
   };
 
   if (isLoading) {
@@ -1033,7 +1081,7 @@ const Leads = () => {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setSelectedLeadForEdit(lead); setEditDialogOpen(true); }}>
+                          <DropdownMenuItem onClick={() => openLeadEditInNewTab(lead)}>
                             Edit Lead
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -1257,7 +1305,7 @@ const Leads = () => {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setSelectedLeadForEdit(lead); setEditDialogOpen(true); }}>
+                          <DropdownMenuItem onClick={() => openLeadEditInNewTab(lead)}>
                             Edit Lead
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -1496,13 +1544,6 @@ const Leads = () => {
       >
         <Plus size={24} strokeWidth={2.5} />
       </button>
-
-      {/* Edit Lead Dialog */}
-      <EditLeadDialog
-        lead={selectedLeadForEdit}
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-      />
 
       {/* Schedule Tour Dialog */}
       <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>

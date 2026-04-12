@@ -6,7 +6,14 @@ export interface ILeadActivity extends Document {
   userId: mongoose.Types.ObjectId; // User who performed the action
   userName: string;
   userRole: string;
-  actionType: 'added' | 'assigned' | 'status_changed' | 'deleted';
+  actionType:
+    | 'added'
+    | 'assigned'
+    | 'assignment_offered'
+    | 'assignment_accepted'
+    | 'assignment_passed_on'
+    | 'status_changed'
+    | 'deleted';
   details?: Record<string, any>; // Flexible payload for "from X to Y", etc.
   createdAt: Date;
 }
@@ -19,7 +26,7 @@ const leadActivitySchema = new Schema<ILeadActivity>({
   userRole: { type: String, required: true },
   actionType: { 
     type: String, 
-    enum: ['added', 'assigned', 'status_changed', 'deleted'], 
+    enum: ['added', 'assigned', 'assignment_offered', 'assignment_accepted', 'assignment_passed_on', 'status_changed', 'deleted'], 
     required: true 
   },
   details: { type: Schema.Types.Mixed },
