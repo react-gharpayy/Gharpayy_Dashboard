@@ -102,8 +102,8 @@ export async function GET(req: Request) {
     const fromQuery = url.searchParams.get('from');
     const toQuery = url.searchParams.get('to');
     const sortQuery: Record<string, 1 | -1> = sort === 'alphabetical'
-      ? { name: 1, createdAt: -1 }
-      : { createdAt: sort === 'oldest' ? 1 : -1 };
+      ? { name: 1, createdAt: -1, _id: 1 }
+      : { createdAt: sort === 'oldest' ? 1 : -1, _id: sort === 'oldest' ? 1 : -1 };
 
     const query: any = {};
     const andFilters: any[] = [];

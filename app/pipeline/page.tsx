@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import AppLayout from '@/components/AppLayout';
 import LeadCard from '@/components/LeadCard';
 import LeadDetailDrawer from '@/components/LeadDetailDrawer';
@@ -11,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   DndContext, DragOverlay, pointerWithin, rectIntersection,
   PointerSensor, TouchSensor,
-  useSensor, useSensors, type DragStartEvent, type DragEndEvent,
+  useSensor, useSensors, type DragStartEvent, type DragEndEvent, type DragMoveEvent,
   type CollisionDetection,
 } from '@dnd-kit/core';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
@@ -92,10 +93,14 @@ function PipelineStageColumn({
   stage,
   onOpenDetail,
   onEdit,
+  minHeight,
+  onHeightChange,
 }: {
   stage: PipelineStageConfig;
   onOpenDetail: (lead: LeadWithRelations) => void;
   onEdit: (lead: LeadWithRelations) => void;
+  minHeight?: number;
+  onHeightChange: (stageKey: string, height: number) => void;
 }) {
   const {
     data,
@@ -104,18 +109,34 @@ function PipelineStageColumn({
     fetchNextPage,
     hasNextPage,
   } = useLeadsInfiniteByStatus(stage.key, PIPELINE_STAGE_PAGE_SIZE);
+  const columnRef = useRef<HTMLDivElement | null>(null);
+  const lastReportedHeightRef = useRef<number | null>(null);
 
   const stageLeads = useMemo(
-    () => (data?.pages || []).flatMap((page) => page.leads),
+    () => Array.from(
+      new Map((data?.pages || []).flatMap((page) => page.leads).map((lead) => [lead.id, lead])).values()
+    ),
     [data]
   );
   const totalLeads = data?.pages?.[0]?.total ?? stageLeads.length;
   const visibleCount = stageLeads.length;
 
+  useEffect(() => {
+    const node = columnRef.current;
+    if (!node) return;
+
+    const currentHeight = node.offsetHeight;
+    if (lastReportedHeightRef.current === currentHeight) return;
+    lastReportedHeightRef.current = currentHeight;
+    onHeightChange(stage.key, currentHeight);
+  }, [onHeightChange, stage.key, stageLeads.length]);
+
   return (
-    <div className="flex items-start">
+    <div className="flex self-stretch">
       <motion.div
-        className="pipeline-column bg-secondary/30 w-[272px] flex flex-col"
+        ref={columnRef}
+        className="pipeline-column bg-secondary/30 w-[272px] min-h-[calc(100vh-260px)] flex flex-col"
+        style={minHeight ? { minHeight: `${minHeight}px` } : undefined}
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
@@ -387,11 +408,18 @@ const Pipeline = () => {
   const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<LeadWithRelations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editStagesOpen, setEditStagesOpen] = useState(false);
+  const [columnHeights, setColumnHeights] = useState<Record<string, number>>({});
+  const [hoveredStageTooltip, setHoveredStageTooltip] = useState<{ label: string; x: number; y: number } | null>(null);
+  const dragStartPointerRef = useRef<{ x: number; y: number } | null>(null);
   const pipelineStages: PipelineStageConfig[] =
     (pipelineStagesData && pipelineStagesData.length > 0)
       ? pipelineStagesData
       : PIPELINE_STAGES.map((stage, index) => ({ ...stage, order: index }));
   const canEditStages = user?.role === 'super_admin';
+  const maxColumnHeight = useMemo(() => {
+    const heights = Object.values(columnHeights);
+    return heights.length ? Math.max(...heights) : 0;
+  }, [columnHeights]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -413,11 +441,60 @@ const Pipeline = () => {
 
     return [];
   };
+  const getPointerPosition = (event: DragStartEvent['activatorEvent'] | DragMoveEvent['activatorEvent']) => {
+    if (!event) return null;
+    const nativeEvent = event as MouseEvent | TouchEvent;
+    if ('touches' in nativeEvent && nativeEvent.touches.length > 0) {
+      return { x: nativeEvent.touches[0].clientX, y: nativeEvent.touches[0].clientY };
+    }
+    if ('changedTouches' in nativeEvent && nativeEvent.changedTouches.length > 0) {
+      return { x: nativeEvent.changedTouches[0].clientX, y: nativeEvent.changedTouches[0].clientY };
+    }
+    if ('clientX' in nativeEvent && 'clientY' in nativeEvent) {
+      return { x: nativeEvent.clientX, y: nativeEvent.clientY };
+    }
+    return null;
+  };
   const handleDragStart = (event: DragStartEvent) => {
+    dragStartPointerRef.current = getPointerPosition(event.activatorEvent);
+    setHoveredStageTooltip(null);
     setActiveLead((event.active.data.current?.lead as LeadWithRelations | undefined) || null);
+  };
+  const handleDragMove = (event: DragMoveEvent) => {
+    const overId = event.over?.id ? String(event.over.id) : null;
+    const start = dragStartPointerRef.current;
+    const label = overId && stageKeys.has(overId)
+      ? pipelineStages.find((stage) => stage.key === overId)?.label || overId
+      : null;
+
+    if (!label || !start) {
+      setHoveredStageTooltip(null);
+      return;
+    }
+
+    const rawX = start.x + event.delta.x + 14;
+    const rawY = start.y + event.delta.y + 14;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+    const tooltipWidth = 220;
+    const tooltipHeight = 36;
+    const x = viewportWidth > 0
+      ? Math.max(8, Math.min(rawX, viewportWidth - tooltipWidth - 8))
+      : rawX;
+    const y = viewportHeight > 0
+      ? Math.max(8, Math.min(rawY, viewportHeight - tooltipHeight - 8))
+      : rawY;
+
+    setHoveredStageTooltip({
+      label,
+      x,
+      y,
+    });
   };
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveLead(null);
+    setHoveredStageTooltip(null);
+    dragStartPointerRef.current = null;
     const { active, over } = event;
     if (!over) return;
     const leadId = active.id as string;
@@ -436,6 +513,13 @@ const Pipeline = () => {
     await savePipelineStages.mutateAsync(stages);
   };
 
+  const handleColumnHeightChange = useCallback((stageKey: string, height: number) => {
+    setColumnHeights((previous) => {
+      if (previous[stageKey] === height) return previous;
+      return { ...previous, [stageKey]: height };
+    });
+  }, []);
+
   if (isLoading) {
     return (
       <AppLayout title="Pipeline" subtitle="Revenue engine — track leads through every stage">
@@ -443,6 +527,18 @@ const Pipeline = () => {
       </AppLayout>
     );
   }
+
+  const tooltipPortal = hoveredStageTooltip
+    ? createPortal(
+        <div
+          className="pointer-events-none fixed z-[10000] max-w-[220px] rounded-full border border-accent/30 bg-accent px-3 py-1 text-[11px] font-semibold text-accent-foreground shadow-lg"
+          style={{ left: hoveredStageTooltip.x, top: hoveredStageTooltip.y }}
+        >
+          {hoveredStageTooltip.label}
+        </div>,
+        document.body
+      )
+    : null;
 
   return (
     <AppLayout
@@ -458,15 +554,18 @@ const Pipeline = () => {
         </div>
       }
     >
-      <DndContext sensors={sensors} collisionDetection={columnOnlyCollision} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={columnOnlyCollision} onDragStart={handleDragStart} onDragMove={handleDragMove} onDragEnd={handleDragEnd}>
+        {tooltipPortal}
         <div className="overflow-x-auto pb-4">
-          <div className="flex gap-2 min-w-max">
+          <div className="flex items-stretch gap-2 min-w-max min-h-[calc(100vh-260px)]">
             {pipelineStages.map((stage) => (
               <PipelineStageColumn
                 key={stage.key}
                 stage={stage}
                 onOpenDetail={openDetail}
                 onEdit={openEdit}
+                minHeight={maxColumnHeight}
+                onHeightChange={handleColumnHeightChange}
               />
             ))}
           </div>
