@@ -219,13 +219,7 @@ const PropertyCard = ({
 
   const copyMap = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const link = pg.mapsLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pg.name || '') + ' ' + (pg.locality || pg.area || '') + ' Bangalore')}`;
-    const pName = pg.name.toUpperCase();
-    const displayName = pName.startsWith('GHARPAYY') ? pName : `GHARPAYY ${pName}`;
-    const msg = `📍 ${displayName}\n` +
-      `🚀 Attention: Pre-Booking Required! _enjoy a seamless experience upon arrival!_\n\n` +
-      `🎯 DESTINATION ${link} |\n\n` +
-      `Secure your spot before you regret it! See you soon in Bangalore! ✨ 🚀`;
+    const msg = pg.locationMsg || `📍 ${pg.name.toUpperCase()} — ${pg.locality || pg.area || 'Bangalore'}`;
     navigator.clipboard.writeText(msg);
     setCopiedMap(true);
     setTimeout(() => setCopiedMap(false), 2000);

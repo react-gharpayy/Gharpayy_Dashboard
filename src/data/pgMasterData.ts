@@ -40,6 +40,7 @@ export interface PGEntry {
   roomNumber?: string;
   waTemplate?: string;
   subArea?: string;
+  locationMsg?: string;
 }
 
 export const PG_DATA: PGEntry[] = rawData as PGEntry[];

@@ -244,7 +244,8 @@ export async function fetchLivePGData(): Promise<PGEntry[]> {
         source: 'LIVE-SHEET',
         priority: '1',
         availability: null,
-        waTemplate: waMsg || locationMsg,
+        locationMsg: locationMsg, 
+        waTemplate: waMsg,  
         subArea: rawArea || area,
         exactName: clean(row[11]),
       });

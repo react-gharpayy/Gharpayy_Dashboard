@@ -110,10 +110,11 @@ export async function GET() {
     const priceLows = getVal(9);  // Col J — LOWS (T 11 / D 15 / S 22)
     const waMsg = getVal(11); // Col L — PRICE (WA blob fallback)
     const food = getVal(14); // Col O — FOOD
-    const mapsLink = getVal(13); // Col R — exact location ✅
+    const mapsLink = getVal(17); // Col R — exact location ✅
+    const locationMsg = getVal(13);
     const exactName = getVal(16); // Col Q — exact name
-    const managerContact = getVal(19); // Col T — manager number
-    const managerName = getVal(20); // Col U — mng name
+    const managerContact = getVal(20); // Col T — manager number
+    const managerName = getVal(21); // Col U — mng name
 
     const genderRaw = name + ' ' + locality;
     let gender = 'Co-live';
@@ -157,6 +158,7 @@ export async function GET() {
       source: 'LIVE-SHEET',
       priority: '1',
       availability: vacant ? parseInt(vacant) : null,
+      locationMsg: locationMsg,
       waTemplate: waMsg,
       subArea: rawArea || area,
       exactName,
