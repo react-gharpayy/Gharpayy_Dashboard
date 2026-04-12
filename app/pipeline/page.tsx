@@ -167,22 +167,20 @@ function PipelineStageColumn({
               )}
             </>
           )}
-        </DroppableColumn>
 
-        {hasNextPage && (
-          <div className="px-1 pt-2">
+          {hasNextPage && (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="w-full text-[11px]"
+              className="w-full text-[11px] mt-2"
               onClick={() => fetchNextPage()}
               disabled={isFetchingNextPage}
             >
               {isFetchingNextPage ? 'Loading...' : `Load more (${visibleCount}/${totalLeads})`}
             </Button>
-          </div>
-        )}
+          )}
+        </DroppableColumn>
       </motion.div>
     </div>
   );
