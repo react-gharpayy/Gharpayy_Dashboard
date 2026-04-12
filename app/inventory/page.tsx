@@ -5,6 +5,7 @@
  * ────────────────────────────────────────────────────────
  * Optimized layout: Small by default.
  * Room Inventory and Details both hidden initially to save space.
+ * Mobile-responsive: single column, area drawer, no sidebar crush.
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -39,13 +40,25 @@ const T = {
 };
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  LOCKED: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
-  AVAILABLE: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
-  APPROVED: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
-  SOFT_LOCKED: { label: 'Tour Hold', color: '#60A5FA', bg: 'rgba(96,165,250,0.1)', dot: '#60A5FA' },
+  LOCKED:      { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',    dot: '#22C55E' },
+  AVAILABLE:   { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',    dot: '#22C55E' },
+  APPROVED:    { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',    dot: '#22C55E' },
+  SOFT_LOCKED: { label: 'Tour Hold',  color: '#60A5FA', bg: 'rgba(96,165,250,0.1)',   dot: '#60A5FA' },
   HARD_LOCKED: { label: 'Pre-Booked', color: '#A78BFA', bg: 'rgba(167,139,250,0.1)', dot: '#A78BFA' },
-  OCCUPIED: { label: 'Occupied', color: '#EF4444', bg: 'rgba(239,68,68,0.1)', dot: '#EF4444' },
+  OCCUPIED:    { label: 'Occupied',   color: '#EF4444', bg: 'rgba(239,68,68,0.1)',    dot: '#EF4444' },
 };
+
+// ─── MOBILE HOOK ──────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
 
 const getMinPrice = (p: PGEntry) => {
   if (p.minPrice && p.minPrice > 5000) return p.minPrice;
@@ -66,7 +79,7 @@ const formatPrice = (price: number) => {
   return `from ₹${(price / 1000).toFixed(1)}k/mo`;
 };
 
-const AREAS = ['All', ...Array.from(new Set(PG_DATA.map(p => p.area).filter(Boolean))).sort()];
+const AREAS   = ['All', ...Array.from(new Set(PG_DATA.map(p => p.area).filter(Boolean))).sort()];
 const GENDERS = ['All', 'Boys', 'Girls', 'coed'];
 
 // ─── VISIT SCHEDULING MODAL ──────────────────────────
@@ -78,12 +91,12 @@ const TourModal = ({ pg, onClose, onSchedule }: {
   const { getRoom } = useRoomStore();
   const rooms = useMemo(() => getRoomsForPG(pg.id).filter(r => getRoom(r).status !== 'OCCUPIED'), [pg.id, getRoom]);
   const [selectedRoomId, setSelectedRoomId] = useState(rooms[0]?.id || '');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [tourType, setTourType] = useState<'Physical' | 'Virtual'>('Physical');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [notes, setNotes] = useState('');
+  const [name, setName]           = useState('');
+  const [phone, setPhone]         = useState('');
+  const [tourType, setTourType]   = useState<'Physical' | 'Virtual'>('Physical');
+  const [date, setDate]           = useState('');
+  const [time, setTime]           = useState('');
+  const [notes, setNotes]         = useState('');
   const canSubmit = !!name && !!date && !!time && !!selectedRoomId;
 
   return (
@@ -186,10 +199,10 @@ const PropertyCard = ({
   onScheduleVisit: () => void;
   viewMode?: 'grid' | 'list';
 }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded]           = useState(false);
   const [roomsExpanded, setRoomsExpanded] = useState(false);
-  const [copiedWA, setCopiedWA] = useState(false);
-  const [copiedMap, setCopiedMap] = useState(false);
+  const [copiedWA, setCopiedWA]           = useState(false);
+  const [copiedMap, setCopiedMap]         = useState(false);
   const minPrice = getMinPrice(pg);
 
   const genderConfig = pg.gender?.toLowerCase().includes('girl') || pg.gender?.toLowerCase().includes('female')
@@ -206,7 +219,8 @@ const PropertyCard = ({
     const d_now = pg.doublePrice ? Math.round(pg.doublePrice / 1000) : 16;
     const s_was = pg.singlePrice ? Math.round((pg.singlePrice + 2000) / 1000) : 27;
     const s_now = pg.singlePrice ? Math.round(pg.singlePrice / 1000) : 23;
-    const msg = `⚡️ Welcome to Gharpayy ${pg.name.toUpperCase()} - ${(pg.gender || 'COED').toUpperCase()}! ⚡️ ❤️ We're thrilled you loved our rooms.🚀 *Exclusive Offer Alert:* **2K OFF MONTHLY** \n\n` +
+    const msg =
+      `⚡️ Welcome to Gharpayy ${pg.name.toUpperCase()} - ${(pg.gender || 'COED').toUpperCase()}! ⚡️ ❤️ We're thrilled you loved our rooms.🚀 *Exclusive Offer Alert:* **2K OFF MONTHLY** \n\n` +
       `🧡Triple Sharing. - ~Was ${t_was}K~, **now only ${t_now}k!*\n` +
       `💛Dual Sharing. - ~Originally ${d_was}K~, **now just ${d_now}K!*\n` +
       `❤️Private rooms - ~Formerly ${s_was}k~, **now specially priced at ${s_now}K!*\n\n` +
@@ -219,6 +233,7 @@ const PropertyCard = ({
 
   const copyMap = (e: React.MouseEvent) => {
     e.stopPropagation();
+    // Copy the raw location message from col N (locationMsg), fall back to a minimal string
     const msg = pg.locationMsg || `📍 ${pg.name.toUpperCase()} — ${pg.locality || pg.area || 'Bangalore'}`;
     navigator.clipboard.writeText(msg);
     setCopiedMap(true);
@@ -241,22 +256,22 @@ const PropertyCard = ({
       alignItems: isList ? 'stretch' : undefined,
     }}>
 
-      {/* Small Header */}
+      {/* Header */}
       <div style={{ padding: '14px 16px', flex: isList ? 1 : 'none', minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <h3 style={{ fontFamily: T.sans, fontWeight: 800, fontSize: 14, color: '#111827', margin: 0, letterSpacing: '-0.01em', minWidth: 0, wordBreak: 'break-word' }}>{pg.name.toUpperCase()}</h3>
-              <span style={{ fontFamily: T.mono, fontSize: 8, color: T.gold, fontWeight: 800, background: T.goldD, padding: '2px 4px', borderRadius: 4 }}>{pg.pid}</span>
+              <span style={{ fontFamily: T.mono, fontSize: 8, color: T.gold, fontWeight: 800, background: T.goldD, padding: '2px 4px', borderRadius: 4, flexShrink: 0 }}>{pg.pid}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, minWidth: 0 }}>
-              <MapPin size={10} style={{ color: T.t2 }} />
+              <MapPin size={10} style={{ color: T.t2, flexShrink: 0 }} />
               <span style={{ fontFamily: T.mono, fontSize: 9, color: T.t2, fontWeight: 600 }}>{pg.area}</span>
-              {pg.landmarks && <span style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, marginLeft: 6, minWidth: 0, wordBreak: 'break-word' }}>• {pg.landmarks}</span>}
+              {pg.landmarks && <span style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, marginLeft: 6, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>• {pg.landmarks}</span>}
             </div>
           </div>
           {!isList && (
-            <div style={{ textAlign: 'right' }}>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <div style={{ color: T.gold, fontWeight: 900, fontSize: 13, textTransform: 'uppercase' }}>{formatPrice(minPrice)}</div>
               <div style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, fontWeight: 700, marginTop: 2 }}>
                 {[
@@ -320,7 +335,8 @@ const PropertyCard = ({
         width: isList ? 300 : '100%',
         flexShrink: isList ? 0 : undefined,
         alignItems: 'center',
-        background: '#fff'
+        background: '#fff',
+        boxSizing: 'border-box',
       }}>
         <button onClick={onScheduleVisit}
           style={{ flex: isList ? 'none' : 2, background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: '#000', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
@@ -385,50 +401,55 @@ const PropertyCard = ({
 
 // ─── MAIN PAGE ────────────────────────────────────────
 export default function InventoryPage() {
-  const [pgDataLive, setPgDataLive] = useState<PGEntry[]>(PG_DATA);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [search, setSearch] = useState('');
-  const [areaFilter, setAreaFilter] = useState('All');
-  const [cityZoneFilter, setCityZoneFilter] = useState('All');
-  const [subAreaFilter, setSubAreaFilter] = useState('All');
-  const [genderFilter, setGenderFilter] = useState('All');
-  const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [pgDataLive, setPgDataLive]           = useState<PGEntry[]>(PG_DATA);
+  const [isSyncing, setIsSyncing]             = useState(false);
+  const [search, setSearch]                   = useState('');
+  const [areaFilter, setAreaFilter]           = useState('All');
+  const [cityZoneFilter, setCityZoneFilter]   = useState('All');
+  const [subAreaFilter, setSubAreaFilter]     = useState('All');
+  const [genderFilter, setGenderFilter]       = useState('All');
+  const [statusFilter, setStatusFilter]       = useState<string>('All');
   const [areaSidebarSearch, setAreaSidebarSearch] = useState('');
+  const [areaDrawerOpen, setAreaDrawerOpen]   = useState(false);
 
   const { snapshot, getRoom, scheduleVisit, getPGStats, getGlobalStats } = useRoomStore();
   const [visitTarget, setVisitTarget] = useState<PGEntry | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode]       = useState<'grid' | 'list'>('grid');
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const sync = async () => {
       setIsSyncing(true);
-      setPgDataLive([]); // clear static data immediately so you know if sheet fails
+      setPgDataLive([]);
       try {
         const [iqData, masterRes] = await Promise.all([
           fetchLivePGData(),
           fetch('/api/sheets/master')
         ]);
 
-        let masterData: PGEntry[] = [];
-        let inactiveNames: Set<string> = new Set();
+        let masterData: PGEntry[]       = [];
+        let inactiveNames: Set<string>  = new Set();
 
         if (masterRes.ok) {
           const masterJson = await masterRes.json();
-          masterData = masterJson.active ?? [];
+          masterData    = masterJson.active ?? [];
           inactiveNames = new Set((masterJson.inactiveNames ?? []).map((n: string) => n.toLowerCase()));
+        } else {
+          const errText = await masterRes.text();
+          console.error('Master route failed:', masterRes.status, errText);
+          toast.error(`Master sheet error: ${masterRes.status}`);
         }
 
-        // Remove IQ entries whose name matches a red/inactive MASTER row
-        const filteredIQ = iqData.filter(p => !inactiveNames.has(p.name.toLowerCase()));
-
-        const iqNames = new Set(filteredIQ.map(p => p.name.toLowerCase()));
+        const filteredIQ   = iqData.filter(p => !inactiveNames.has(p.name.toLowerCase()));
+        const iqNames      = new Set(filteredIQ.map(p => p.name.toLowerCase()));
         const uniqueMaster = masterData.filter(p => !iqNames.has(p.name.toLowerCase()));
-        const combined = [...filteredIQ, ...uniqueMaster];
+        const combined     = [...filteredIQ, ...uniqueMaster];
+
         if (combined.length > 0) {
           setPgDataLive(combined);
           toast.success(`Synced ${combined.length} PGs from Sheet ✅`);
         } else {
-          setPgDataLive(PG_DATA); // genuine fallback only if both sources return 0
+          setPgDataLive(PG_DATA);
           toast.error('Sheet returned 0 PGs — showing cached data');
         }
       } catch (e) {
@@ -455,7 +476,7 @@ export default function InventoryPage() {
 
       let matchArea = true;
       if (areaFilter !== 'All') {
-        const qz = normalize(areaFilter);
+        const qz    = normalize(areaFilter);
         const pzArea = normalize(p.area || p.locality || '');
         matchArea = pzArea.includes(qz);
       }
@@ -467,14 +488,16 @@ export default function InventoryPage() {
         matchSubArea = ps.includes(qs);
       }
 
-      const matchGender = genderFilter === 'All' || p.gender?.toLowerCase().includes(genderFilter.toLowerCase().slice(0, 3)) || (genderFilter === 'coed' && p.gender?.toLowerCase().includes('co'));
+      const matchGender = genderFilter === 'All'
+        || p.gender?.toLowerCase().includes(genderFilter.toLowerCase().slice(0, 3))
+        || (genderFilter === 'coed' && p.gender?.toLowerCase().includes('co'));
 
       let matchStatus = true;
       if (statusFilter !== 'All') {
         const pgRooms = getRoomsForPG(p.id);
-        const states = pgRooms.map(r => getRoom(r));
-        if (statusFilter === 'LIVE') matchStatus = states.some(s => s.status === 'APPROVED');
-        else if (statusFilter === 'SCHED') matchStatus = states.some(s => s.status === 'SOFT_LOCKED');
+        const states  = pgRooms.map(r => getRoom(r));
+        if (statusFilter === 'LIVE')     matchStatus = states.some(s => s.status === 'APPROVED');
+        else if (statusFilter === 'SCHED')    matchStatus = states.some(s => s.status === 'SOFT_LOCKED');
         else if (statusFilter === 'OCCUPIED') matchStatus = states.some(s => s.status === 'OCCUPIED');
       }
 
@@ -482,19 +505,16 @@ export default function InventoryPage() {
     });
   }, [search, cityZoneFilter, areaFilter, subAreaFilter, genderFilter, statusFilter, getRoom, pgDataLive]);
 
-  const stats = useMemo(() => {
-    return getGlobalStats(ROOM_MASTER);
-  }, [getGlobalStats, snapshot]);
+  const stats = useMemo(() => getGlobalStats(ROOM_MASTER), [getGlobalStats, snapshot]);
 
-  const areasWithPGs = useMemo(() => {
-    return Array.from(new Set(pgDataLive.map(p => (p.area || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-  }, [pgDataLive]);
+  const areasWithPGs = useMemo(() =>
+    Array.from(new Set(pgDataLive.map(p => (p.area || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [pgDataLive]
+  );
 
   const sidebarAreas = useMemo(() => {
     let list = areasWithPGs;
-    if (cityZoneFilter !== 'All') {
-      list = list.filter(a => getZoneByArea(a).zone === cityZoneFilter);
-    }
+    if (cityZoneFilter !== 'All') list = list.filter(a => getZoneByArea(a).zone === cityZoneFilter);
     if (areaSidebarSearch.trim()) {
       const q = areaSidebarSearch.toLowerCase();
       list = list.filter(a => a.toLowerCase().includes(q));
@@ -509,57 +529,97 @@ export default function InventoryPage() {
     toast.success('Tour scheduled');
   };
 
+  // ─── SHARED AREA LIST (used in both sidebar and mobile drawer) ────────────
+  const AreaList = ({ onSelect }: { onSelect?: () => void }) => (
+    <>
+      <div style={{ position: 'relative', marginBottom: 8 }}>
+        <Search size={10} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: T.t2 }} />
+        <input
+          value={areaSidebarSearch}
+          onChange={e => setAreaSidebarSearch(e.target.value)}
+          placeholder="Search area..."
+          style={{ width: '100%', background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 6, padding: '7px 8px 7px 26px', fontSize: 11, color: T.t0, boxSizing: 'border-box' }}
+        />
+      </div>
+      <button
+        onClick={() => { setAreaFilter('All'); onSelect?.(); }}
+        style={{ width: '100%', textAlign: 'left', padding: '7px 8px', borderRadius: 6, fontSize: 12, fontWeight: 800, cursor: 'pointer', marginBottom: 3, border: areaFilter === 'All' ? '1.5px solid #000' : '1px solid transparent', background: areaFilter === 'All' ? '#111827' : 'transparent', color: areaFilter === 'All' ? '#fff' : T.t1, transition: 'all 0.12s' }}>
+        All Areas
+      </button>
+      {sidebarAreas.map(area => {
+        const count    = pgDataLive.filter(p => (p.area || '').toLowerCase() === area.toLowerCase()).length;
+        const isActive = areaFilter === area;
+        return (
+          <button key={area} onClick={() => { setAreaFilter(isActive ? 'All' : area); onSelect?.(); }}
+            style={{ width: '100%', textAlign: 'left', padding: '7px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', marginBottom: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: isActive ? '1.5px solid #000' : '1px solid transparent', background: isActive ? '#111827' : 'transparent', color: isActive ? '#fff' : T.t1, transition: 'all 0.12s' }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>{area}</span>
+            <span style={{ fontSize: 9, fontWeight: 900, background: isActive ? 'rgba(255,255,255,0.2)' : T.goldD, color: isActive ? '#fff' : T.gold, padding: '1px 5px', borderRadius: 10, flexShrink: 0 }}>{count}</span>
+          </button>
+        );
+      })}
+    </>
+  );
+
   return (
     <AppLayout title="Inventory OS" subtitle="Platform Truth">
       <div style={{ minHeight: '100vh', background: T.bg0, color: T.t0, fontFamily: T.sans, paddingBottom: 80 }}>
 
-        {/* Sticky Filter Bar */}
+        {/* ── Sticky Filter Bar ── */}
         <div style={{ background: T.bg1, borderBottom: `1px solid ${T.line}`, position: 'sticky', top: 0, zIndex: 100, padding: '8px 12px' }}>
           <div style={{ maxWidth: 1440, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
 
-            {/* Row 1 */}
+            {/* Row 1: Title + status btns + view toggle */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: 15, fontWeight: 800, margin: 0, whiteSpace: 'nowrap' }}>Inventory OS</h1>
               {isSyncing && (
                 <div style={{ fontSize: 9, color: T.gold, background: T.goldD, padding: '2px 6px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <div style={{ width: 8, height: 8, border: `2px solid ${T.gold}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                  <div style={{ width: 8, height: 8, border: `2px solid ${T.gold}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                   Syncing...
                 </div>
               )}
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
                 <StatusBtn label="ALL" color={T.t1} bg={T.bg3} border={T.line} active={statusFilter === 'All'} onClick={() => setStatusFilter('All')} />
                 <StatusBtn label={`${stats.live} LIVE`} color={T.green} bg={T.greenD} border={T.greenB} active={statusFilter === 'LIVE'} onClick={() => setStatusFilter('LIVE')} />
                 <StatusBtn label={`${stats.scheduled} SCHED`} color={T.blue} bg={T.blueD} border={T.blueB} active={statusFilter === 'SCHED'} onClick={() => setStatusFilter('SCHED')} />
                 <StatusBtn label={`${stats.occupied} OCC`} color="#EF4444" bg="rgba(239,68,68,0.1)" border="rgba(239,68,68,0.3)" active={statusFilter === 'OCCUPIED'} onClick={() => setStatusFilter('OCCUPIED')} />
               </div>
-              <div style={{ display: 'flex', background: T.bg2, borderRadius: 7, padding: 2, border: `1px solid ${T.line}`, flexShrink: 0 }}>
-                <button onClick={() => setViewMode('grid')} style={{ padding: '5px 8px', borderRadius: 5, background: viewMode === 'grid' ? T.bg4 : 'transparent', border: 'none', color: viewMode === 'grid' ? T.t0 : T.t2, cursor: 'pointer' }}>
-                  <LayoutGrid size={13} />
-                </button>
-                <button onClick={() => setViewMode('list')} style={{ padding: '5px 8px', borderRadius: 5, background: viewMode === 'list' ? T.bg4 : 'transparent', border: 'none', color: viewMode === 'list' ? T.t0 : T.t2, cursor: 'pointer' }}>
-                  <List size={13} />
-                </button>
+              {/* View toggle + mobile areas button */}
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {isMobile && (
+                  <button onClick={() => setAreaDrawerOpen(true)}
+                    style={{ background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 7, padding: '5px 10px', fontSize: 10, fontWeight: 800, color: T.t1, cursor: 'pointer' }}>
+                    📍 Areas
+                  </button>
+                )}
+                <div style={{ display: 'flex', background: T.bg2, borderRadius: 7, padding: 2, border: `1px solid ${T.line}` }}>
+                  <button onClick={() => setViewMode('grid')} style={{ padding: '5px 8px', borderRadius: 5, background: viewMode === 'grid' ? T.bg4 : 'transparent', border: 'none', color: viewMode === 'grid' ? T.t0 : T.t2, cursor: 'pointer' }}>
+                    <LayoutGrid size={13} />
+                  </button>
+                  <button onClick={() => setViewMode('list')} style={{ padding: '5px 8px', borderRadius: 5, background: viewMode === 'list' ? T.bg4 : 'transparent', border: 'none', color: viewMode === 'list' ? T.t0 : T.t2, cursor: 'pointer' }}>
+                    <List size={13} />
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Row 2: Zone Pills */}
+            {/* Row 2: Zone pills */}
             <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, paddingTop: 4, scrollbarWidth: 'none' }}>
               {[{ key: 'All', label: 'All Zones' }, ...Object.keys(ZONES).map(k => ({ key: k, label: k }))].map(z => (
                 <button key={z.key} onClick={() => { setCityZoneFilter(z.key); setAreaFilter('All'); setSubAreaFilter('All'); }}
                   style={{
                     padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
-                    border: cityZoneFilter === z.key ? `1.5px solid #000` : `1px solid ${T.line}`,
+                    border: cityZoneFilter === z.key ? '1.5px solid #000' : `1px solid ${T.line}`,
                     background: cityZoneFilter === z.key ? '#111827' : T.bg2,
                     color: cityZoneFilter === z.key ? '#fff' : T.t1,
                     boxShadow: cityZoneFilter === z.key ? '1px 1px 0 #000' : 'none',
-                    transition: 'all 0.15s'
+                    transition: 'all 0.15s',
                   }}>{z.label}</button>
               ))}
             </div>
 
             {/* Row 3: Search + Gender */}
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%', paddingTop: 2 }}>
-              <div style={{ position: 'relative', flex: 1 }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
                 <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: T.t2 }} />
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search PG..."
                   style={{ width: '100%', background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 6, padding: '7px 8px 7px 24px', color: T.t0, fontSize: 11, boxSizing: 'border-box' }} />
@@ -575,8 +635,22 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        {/* Main layout */}
-        <div style={{ maxWidth: 1440, margin: '0 auto', padding: '16px', display: 'flex', gap: 16, alignItems: 'flex-start', position: 'relative' }}>
+        {/* ── Mobile Area Drawer ── */}
+        {isMobile && areaDrawerOpen && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} onClick={() => setAreaDrawerOpen(false)} />
+            <div style={{ position: 'relative', background: T.bg1, borderRadius: '16px 16px 0 0', padding: '16px 14px 40px', maxHeight: '72vh', overflowY: 'auto', zIndex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, color: T.t2, letterSpacing: '0.08em', fontFamily: T.mono }}>AREAS WITH PGs</div>
+                <button onClick={() => setAreaDrawerOpen(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: T.t1, lineHeight: 1 }}>✕</button>
+              </div>
+              <AreaList onSelect={() => setAreaDrawerOpen(false)} />
+            </div>
+          </div>
+        )}
+
+        {/* ── Main layout ── */}
+        <div style={{ maxWidth: 1440, margin: '0 auto', padding: '16px', display: 'flex', gap: 16, alignItems: 'flex-start' }}>
 
           {/* Property Cards */}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -584,7 +658,10 @@ export default function InventoryPage() {
               className={viewMode === 'grid' ? 'inventory-grid' : ''}
               style={{
                 display: viewMode === 'grid' ? 'grid' : 'flex',
-                gridTemplateColumns: viewMode === 'grid' ? 'repeat(2, minmax(0, 1fr))' : undefined,
+                // single column on mobile, two on desktop
+                gridTemplateColumns: viewMode === 'grid'
+                  ? (isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))')
+                  : undefined,
                 flexDirection: viewMode === 'list' ? 'column' : undefined,
                 alignItems: 'stretch',
                 gap: 12,
@@ -605,37 +682,17 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          {/* Area Sidebar */}
-          <div style={{
-            width: 200, flexShrink: 0, background: T.bg1, border: `1px solid ${T.line}`,
-            borderRadius: 12, padding: '12px 10px', position: 'sticky', top: 180,
-            maxHeight: 'calc(100vh - 210px)', overflowY: 'auto', zIndex: 10
-          }}>
-            <div style={{ fontSize: 9, fontWeight: 900, color: T.t2, letterSpacing: '0.08em', marginBottom: 8, fontFamily: T.mono }}>AREAS WITH PGs</div>
-            <div style={{ position: 'relative', marginBottom: 8 }}>
-              <Search size={10} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: T.t2 }} />
-              <input value={areaSidebarSearch} onChange={e => setAreaSidebarSearch(e.target.value)}
-                placeholder="Search area..."
-                style={{ width: '100%', background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 6, padding: '6px 8px 6px 24px', fontSize: 10, color: T.t0, boxSizing: 'border-box' }} />
+          {/* Area Sidebar — desktop only */}
+          {!isMobile && (
+            <div style={{
+              width: 200, flexShrink: 0, background: T.bg1, border: `1px solid ${T.line}`,
+              borderRadius: 12, padding: '12px 10px', position: 'sticky', top: 180,
+              maxHeight: 'calc(100vh - 210px)', overflowY: 'auto', zIndex: 10,
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 900, color: T.t2, letterSpacing: '0.08em', marginBottom: 8, fontFamily: T.mono }}>AREAS WITH PGs</div>
+              <AreaList />
             </div>
-            <button onClick={() => setAreaFilter('All')}
-              style={{ width: '100%', textAlign: 'left', padding: '6px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800, cursor: 'pointer', marginBottom: 2, border: areaFilter === 'All' ? '1.5px solid #000' : `1px solid transparent`, background: areaFilter === 'All' ? '#111827' : 'transparent', color: areaFilter === 'All' ? '#fff' : T.t1, transition: 'all 0.12s' }}>
-              All Areas
-            </button>
-            {sidebarAreas.map(area => {
-              const count = pgDataLive.filter(p => (p.area || '').toLowerCase() === area.toLowerCase()).length;
-              const isActive = areaFilter === area;
-              return (
-                <button key={area} onClick={() => setAreaFilter(isActive ? 'All' : area)}
-                  style={{ width: '100%', textAlign: 'left', padding: '6px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', marginBottom: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: isActive ? '1.5px solid #000' : `1px solid transparent`, background: isActive ? '#111827' : 'transparent', color: isActive ? '#fff' : T.t1, transition: 'all 0.12s' }}
-                  onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = T.bg2; }}
-                  onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>{area}</span>
-                  <span style={{ fontSize: 9, fontWeight: 900, background: isActive ? 'rgba(255,255,255,0.2)' : T.goldD, color: isActive ? '#fff' : T.gold, padding: '1px 5px', borderRadius: 10, flexShrink: 0 }}>{count}</span>
-                </button>
-              );
-            })}
-          </div>
+          )}
         </div>
       </div>
 
