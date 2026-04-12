@@ -21,6 +21,11 @@ const AppLayout = ({ children, title, subtitle, actions, showQuickAddLead = true
   const [cmdOpen, setCmdOpen] = useState(false);
   const { user } = useAuth();
   const userLabel = formatUserLabel(user);
+  const shouldShowZonesInHeader = ['member', 'admin'].includes(String(user?.role || '').toLowerCase());
+  const userZones = shouldShowZonesInHeader && Array.isArray(user?.zones)
+    ? user.zones.map((zone) => String(zone).trim()).filter(Boolean)
+    : [];
+  const userZonesLabel = userZones.join(', ');
 
   return (
     <div className="min-h-screen bg-background">
@@ -39,8 +44,11 @@ const AppLayout = ({ children, title, subtitle, actions, showQuickAddLead = true
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {userLabel && (
-              <div className="hidden sm:flex items-center px-3 py-1.5 rounded-full border border-border/60 bg-secondary/70 text-[11px] font-medium text-foreground/80 max-w-[180px] truncate">
-                {userLabel}
+              <div className="hidden sm:flex flex-col px-3 py-1.5 rounded-full border border-border/60 bg-secondary/70 max-w-[220px]">
+                <p className="text-[11px] font-medium text-foreground/80 leading-tight truncate">{userLabel}</p>
+                {userZonesLabel && (
+                  <p className="text-[10px] text-muted-foreground leading-tight truncate">{userZonesLabel}</p>
+                )}
               </div>
             )}
             {actions}

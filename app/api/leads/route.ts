@@ -141,7 +141,34 @@ export async function GET(req: Request) {
     }
 
     if (zone) {
-      query.zone = zone;
+      if ((zone === 'my_zones' || zone === 'other_zones') && ['admin', 'member'].includes(authUser.role)) {
+        const authUserDoc = await User.findById(authUser.id).select('zones').lean();
+        const authZones = Array.isArray((authUserDoc as any)?.zones)
+          ? (authUserDoc as any).zones
+            .map((value: any) => String(value).trim())
+            .filter(Boolean)
+          : [];
+
+        if (zone === 'my_zones') {
+          if (authZones.length === 0) {
+            andFilters.push({ _id: null });
+          } else {
+            andFilters.push({
+              $or: authZones.map((z) => ({ zone: { $regex: `^${escapeRegex(z)}$`, $options: 'i' } })),
+            });
+          }
+        }
+
+        if (zone === 'other_zones') {
+          if (authZones.length > 0) {
+            andFilters.push({
+              $nor: authZones.map((z) => ({ zone: { $regex: `^${escapeRegex(z)}$`, $options: 'i' } })),
+            });
+          }
+        }
+      } else if (zone !== 'all') {
+        query.zone = zone;
+      }
     }
 
     if (q) {

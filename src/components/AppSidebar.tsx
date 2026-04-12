@@ -40,6 +40,9 @@ const AppSidebar = ({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => voi
   const { signOut, user } = useAuth();
   const [dark, setDark] = useState(false);
   const userLabel = formatUserLabel(user);
+  const zoneLabel = Array.isArray(user?.zones) && user.zones.length > 0
+    ? user.zones.join(', ')
+    : '';
   useEffect(() => {
     setDark(document.documentElement.classList.contains('dark'));
   }, []);
@@ -126,6 +129,11 @@ const AppSidebar = ({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => voi
                 <p className="text-[11px] font-medium truncate" style={{ color: 'hsl(var(--sidebar-active-fg))' }}>
                   {userLabel || 'Signed in user'}
                 </p>
+                {zoneLabel && (
+                  <p className="text-[10px] truncate" style={{ color: 'hsl(var(--sidebar-fg))' }}>
+                    {zoneLabel}
+                  </p>
+                )}
               </div>
             </div>
           </div>

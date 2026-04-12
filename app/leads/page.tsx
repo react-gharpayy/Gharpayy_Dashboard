@@ -284,6 +284,13 @@ const Leads = () => {
   const { user } = useAuth();
   const canManageLeadAssignments = ['super_admin', 'manager', 'admin', 'member'].includes(user?.role || '');
   const canAddLead = ['super_admin', 'manager', 'admin', 'member'].includes(user?.role || '');
+  const isScopedZoneRole = ['admin', 'member'].includes(user?.role || '');
+
+  useEffect(() => {
+    if (isScopedZoneRole && (filterZone === 'all' || !filterZone)) {
+      setFilterZone('my_zones');
+    }
+  }, [isScopedZoneRole, filterZone]);
 
   useEffect(() => {
     if (!scheduleAssignedTo) return;
@@ -319,7 +326,12 @@ const Leads = () => {
       if (filterStatus !== 'all' && l.status !== filterStatus) return false;
       if (filterDuplicate === 'duplicate' && !l.isDuplicate) return false;
       if (filterDuplicate === 'unique' && l.isDuplicate) return false;
-      if (filterZone !== 'all' && (l as any).zone !== filterZone) return false;
+      if (
+        filterZone !== 'all' &&
+        filterZone !== 'my_zones' &&
+        filterZone !== 'other_zones' &&
+        (l as any).zone !== filterZone
+      ) return false;
       
       return true;
     });
@@ -696,8 +708,17 @@ const Leads = () => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent side="bottom" align="start">
-                <SelectItem value="all">All Zones</SelectItem>
-                {officeZones?.map(z => <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>)}
+                {isScopedZoneRole ? (
+                  <>
+                    <SelectItem value="my_zones">My Zones</SelectItem>
+                    <SelectItem value="other_zones">Other Zones</SelectItem>
+                  </>
+                ) : (
+                  <>
+                    <SelectItem value="all">All Zones</SelectItem>
+                    {officeZones?.map(z => <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>)}
+                  </>
+                )}
               </SelectContent>
             </Select>
 
@@ -815,8 +836,17 @@ const Leads = () => {
             <Select value={filterZone} onValueChange={setFilterZone}>
               <SelectTrigger className="w-full h-8 text-[10px] rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
-                <SelectItem value="all">All Zones</SelectItem>
-                {officeZones?.map(z => <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>)}
+                {isScopedZoneRole ? (
+                  <>
+                    <SelectItem value="my_zones">My Zones</SelectItem>
+                    <SelectItem value="other_zones">Other Zones</SelectItem>
+                  </>
+                ) : (
+                  <>
+                    <SelectItem value="all">All Zones</SelectItem>
+                    {officeZones?.map(z => <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>)}
+                  </>
+                )}
               </SelectContent>
             </Select>
             <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); setFromDate(''); setToDate(''); }}>
