@@ -60,6 +60,28 @@ async function createAssignmentNotification({
   });
 }
 
+async function getScopedMemberIdsForAdmin(adminId: string) {
+  const adminUser = await User.findById(adminId).select('zones');
+  const adminZones = new Set(
+    (adminUser?.zones || []).map((zone: any) => String(zone).trim().toLowerCase()).filter(Boolean)
+  );
+
+  if (adminZones.size === 0) return [] as string[];
+
+  const allMembers = await User.find({ role: 'member', status: { $in: ['active', 'inactive'] } })
+    .select('_id zones')
+    .lean();
+
+  return allMembers
+    .filter((member: any) => {
+      const memberZones = Array.isArray(member.zones)
+        ? member.zones.map((zone: any) => String(zone).trim().toLowerCase()).filter(Boolean)
+        : [];
+      return memberZones.some((zone: string) => adminZones.has(zone));
+    })
+    .map((member: any) => String(member._id));
+}
+
 export async function GET(req: Request) {
   try {
     const authUser = await getAuthUserFromCookie();
@@ -98,6 +120,15 @@ export async function GET(req: Request) {
           { assignmentStatus: { $ne: 'pending' } },
         ],
       });
+    }
+
+    if (authUser.role === 'admin') {
+      const scopedMemberIds = await getScopedMemberIdsForAdmin(authUser.id);
+      if (scopedMemberIds.length === 0) {
+        return NextResponse.json({ leads: [], total: 0 });
+      }
+
+      andFilters.push({ assignedMemberId: { $in: scopedMemberIds } });
     }
 
     // Optional status filter

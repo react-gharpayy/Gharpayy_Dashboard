@@ -4,6 +4,7 @@ import Lead from '@/models/Lead';
 import Visit from '@/models/Visit';
 import Booking from '@/models/Booking';
 import Member from '@/models/Member';
+import User from '@/models/User';
 import { getAuthUserFromCookie } from '@/lib/auth';
 import mongoose from 'mongoose';
 
@@ -28,6 +29,7 @@ export async function GET() {
 
     const leadQuery: any = {};
     const bookingQuery: any = { bookingStatus: 'booked' };
+    let scopedMemberIds: string[] = [];
 
     if (authUser.role === 'member') {
       leadQuery.assignedMemberId = authUser.id;
@@ -35,6 +37,40 @@ export async function GET() {
       // For visits and bookings, we need to filter by associated lead or assigned agent
       // Assuming Visit has a leadId or assignedTo field (need to check models)
       // If we don't have direct filtering on visits/bookings, we might need a more complex query
+    }
+
+    if (authUser.role === 'admin') {
+      const adminUser = await User.findById(authUser.id).select('zones');
+      const adminZones = new Set((adminUser?.zones || []).map((zone: any) => String(zone).trim().toLowerCase()).filter(Boolean));
+
+      if (adminZones.size === 0) {
+        return NextResponse.json({
+          totalLeads: 0,
+          newToday: 0,
+          leadsToday: 0,
+          avgResponseTime: 0,
+          slaCompliance: 0,
+          slaBreaches: 0,
+          conversionRate: 0,
+          visitsScheduled: 0,
+          toursScheduledToday: 0,
+          visitsCompleted: 0,
+          bookingsClosed: 0,
+          perEmployee: [],
+        });
+      }
+
+      const teamMembers = await User.find({ role: 'member', status: { $in: ['active', 'inactive'] } }).select('_id zones').lean();
+      scopedMemberIds = teamMembers
+        .filter((member: any) => {
+          const memberZones = Array.isArray(member.zones)
+            ? member.zones.map((zone: any) => String(zone).trim().toLowerCase()).filter(Boolean)
+            : [];
+          return memberZones.some((zone: string) => adminZones.has(zone));
+        })
+        .map((member: any) => String(member._id));
+
+      leadQuery.assignedMemberId = { $in: scopedMemberIds };
     }
 
     const [leads] = await Promise.all([
@@ -75,6 +111,8 @@ export async function GET() {
     const memberFilter: any = {};
     if (authUser.role === 'member') {
       memberFilter._id = new mongoose.Types.ObjectId(authUser.id);
+    } else if (authUser.role === 'admin' && scopedMemberIds.length > 0) {
+      memberFilter._id = { $in: scopedMemberIds.map((id) => new mongoose.Types.ObjectId(id)) };
     }
     const members = await Member.find(memberFilter).select('name zoneName isActive').lean();
     const memberIdSet = new Set(members.map(m => m._id.toString()));
@@ -82,6 +120,8 @@ export async function GET() {
     const leadMatch: any = { createdAt: { $gte: startUtc, $lt: endUtc } };
     if (authUser.role === 'member') {
       leadMatch.createdBy = new mongoose.Types.ObjectId(authUser.id);
+    } else if (authUser.role === 'admin' && scopedMemberIds.length > 0) {
+      leadMatch.createdBy = { $in: scopedMemberIds.map((id) => new mongoose.Types.ObjectId(id)) };
     }
     const leadAgg = await Lead.aggregate([
       { $match: leadMatch },
@@ -91,6 +131,8 @@ export async function GET() {
     const visitMatch: any = { scheduledAt: { $gte: startUtc, $lt: endUtc } };
     if (authUser.role === 'member') {
       visitMatch.assignedStaffId = new mongoose.Types.ObjectId(authUser.id);
+    } else if (authUser.role === 'admin' && scopedMemberIds.length > 0) {
+      visitMatch.assignedStaffId = { $in: scopedMemberIds.map((id) => new mongoose.Types.ObjectId(id)) };
     }
     const visitAgg = await Visit.aggregate([
       { $match: visitMatch },
