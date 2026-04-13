@@ -23,6 +23,7 @@ import { AREAS_LIST, getSubAreasForArea, matchPropertyToGeo, GEO_MASTER } from '
 import SearchableSelect from '@/components/SearchableSelect';
 import { toast } from 'sonner';
 import { useRoomStore, type VisitData, type RoomState } from '@/hooks/useInventoryStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 const T = {
   bg0: '#F8F9FA', bg1: '#FFFFFF', bg2: '#FFF6F4', bg3: '#FFFFFF', bg4: '#FEF3C7',
@@ -40,12 +41,12 @@ const T = {
 };
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  LOCKED:      { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',    dot: '#22C55E' },
-  AVAILABLE:   { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',    dot: '#22C55E' },
-  APPROVED:    { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',    dot: '#22C55E' },
-  SOFT_LOCKED: { label: 'Tour Hold',  color: '#60A5FA', bg: 'rgba(96,165,250,0.1)',   dot: '#60A5FA' },
+  LOCKED: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
+  AVAILABLE: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
+  APPROVED: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
+  SOFT_LOCKED: { label: 'Tour Hold', color: '#60A5FA', bg: 'rgba(96,165,250,0.1)', dot: '#60A5FA' },
   HARD_LOCKED: { label: 'Pre-Booked', color: '#A78BFA', bg: 'rgba(167,139,250,0.1)', dot: '#A78BFA' },
-  OCCUPIED:    { label: 'Occupied',   color: '#EF4444', bg: 'rgba(239,68,68,0.1)',    dot: '#EF4444' },
+  OCCUPIED: { label: 'Occupied', color: '#EF4444', bg: 'rgba(239,68,68,0.1)', dot: '#EF4444' },
 };
 
 // ─── MOBILE HOOK ──────────────────────────────────────
@@ -79,7 +80,7 @@ const formatPrice = (price: number) => {
   return `from ₹${(price / 1000).toFixed(1)}k/mo`;
 };
 
-const AREAS   = ['All', ...Array.from(new Set(PG_DATA.map(p => p.area).filter(Boolean))).sort()];
+const AREAS = ['All', ...Array.from(new Set(PG_DATA.map(p => p.area).filter(Boolean))).sort()];
 const GENDERS = ['All', 'Boys', 'Girls', 'coed'];
 
 // ─── VISIT SCHEDULING MODAL ──────────────────────────
@@ -91,12 +92,12 @@ const TourModal = ({ pg, onClose, onSchedule }: {
   const { getRoom } = useRoomStore();
   const rooms = useMemo(() => getRoomsForPG(pg.id).filter(r => getRoom(r).status !== 'OCCUPIED'), [pg.id, getRoom]);
   const [selectedRoomId, setSelectedRoomId] = useState(rooms[0]?.id || '');
-  const [name, setName]           = useState('');
-  const [phone, setPhone]         = useState('');
-  const [tourType, setTourType]   = useState<'Physical' | 'Virtual'>('Physical');
-  const [date, setDate]           = useState('');
-  const [time, setTime]           = useState('');
-  const [notes, setNotes]         = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [tourType, setTourType] = useState<'Physical' | 'Virtual'>('Physical');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [notes, setNotes] = useState('');
   const canSubmit = !!name && !!date && !!time && !!selectedRoomId;
 
   return (
@@ -191,19 +192,23 @@ function getBrochureUrl(name: string): string | null {
 
 // ─── MAIN PROPERTY CARD ───────────────────────────────
 const PropertyCard = ({
-  pg, idx, pgRooms, onScheduleVisit, viewMode = 'grid'
+  pg, idx, pgRooms, onScheduleVisit, viewMode = 'grid', isAdmin = false, onToggleStatus
 }: {
   pg: PGEntry;
   idx: number;
   pgRooms: (Room & { state: RoomState })[];
   onScheduleVisit: () => void;
   viewMode?: 'grid' | 'list';
+  isAdmin?: boolean;
+  onToggleStatus?: (id: number, newStatus: boolean) => void;
 }) => {
-  const [expanded, setExpanded]           = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [roomsExpanded, setRoomsExpanded] = useState(false);
-  const [copiedWA, setCopiedWA]           = useState(false);
-  const [copiedMap, setCopiedMap]         = useState(false);
+  const [copiedWA, setCopiedWA] = useState(false);
+  const [copiedMap, setCopiedMap] = useState(false);
+  const [togglingStatus, setTogglingStatus] = useState(false);
   const minPrice = getMinPrice(pg);
+  const isActive = pg.isActive !== false; // treat undefined (sheet data) as true
 
   const genderConfig = pg.gender?.toLowerCase().includes('girl') || pg.gender?.toLowerCase().includes('female')
     ? { color: '#EC4899', bg: 'rgba(236,72,153,0.08)', border: 'rgba(236,72,153,0.22)', label: 'Girls' }
@@ -212,13 +217,13 @@ const PropertyCard = ({
       : { color: T.t1, bg: T.bg3, border: T.line, label: 'coed' };
 
   const copyWA = (e: React.MouseEvent) => {
-  e.stopPropagation();
-  const msg = pg.waTemplate || `📍 ${pg.name.toUpperCase()}`;
-  navigator.clipboard.writeText(msg);
-  setCopiedWA(true);
-  setTimeout(() => setCopiedWA(false), 2000);
-  toast.success('Exclusive Offer Message Copied! ⚡️');
-};
+    e.stopPropagation();
+    const msg = pg.waTemplate || `📍 ${pg.name.toUpperCase()}`;
+    navigator.clipboard.writeText(msg);
+    setCopiedWA(true);
+    setTimeout(() => setCopiedWA(false), 2000);
+    toast.success('Exclusive Offer Message Copied! ⚡️');
+  };
 
   const copyMap = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -230,12 +235,36 @@ const PropertyCard = ({
     toast.success('Location Message copied! 📍');
   };
 
+  const handleToggleStatus = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!pg.id || togglingStatus) return;
+    setTogglingStatus(true);
+    try {
+      const res = await fetch(`/api/properties/${pg.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !isActive }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to update status');
+        return;
+      }
+      onToggleStatus?.(pg.id, !isActive);
+      toast.success(`${pg.name} ${!isActive ? 'enabled' : 'disabled'} ✅`);
+    } catch {
+      toast.error('Network error — could not update status');
+    } finally {
+      setTogglingStatus(false);
+    }
+  };
+
   const isList = viewMode === 'list';
 
   return (
     <div className={`gp-card ${isList ? 'inventory-list-card' : ''}`} style={{
       background: T.bg2,
-      border: `1px solid ${T.line}`,
+      border: `1px solid ${!isActive ? T.t3 : T.line}`,
       borderRadius: 12,
       overflow: 'hidden',
       width: '100%',
@@ -243,6 +272,8 @@ const PropertyCard = ({
       transition: 'all 0.2s',
       display: isList ? 'flex' : 'block',
       alignItems: isList ? 'stretch' : undefined,
+      opacity: !isActive ? 0.5 : 1,
+      filter: !isActive ? 'grayscale(0.4)' : 'none',
     }}>
 
       {/* Header */}
@@ -318,30 +349,32 @@ const PropertyCard = ({
       <div style={{
         padding: '12px 16px',
         display: 'flex',
+        flexWrap: 'wrap',
         gap: 8,
         borderTop: isList ? 'none' : `1px solid ${T.line}`,
         borderLeft: isList ? `1px solid ${T.line}` : 'none',
-        width: isList ? 300 : '100%',
+        width: isList ? 'auto' : '100%',
+        maxWidth: '100%',
         flexShrink: isList ? 0 : undefined,
         alignItems: 'center',
         background: '#fff',
         boxSizing: 'border-box',
       }}>
-        <button onClick={onScheduleVisit}
-          style={{ flex: isList ? 'none' : 2, background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: '#000', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
+        <button onClick={!isActive ? undefined : onScheduleVisit}
+          style={{ flex: isList ? 'none' : 2, background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: '#000', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 6, cursor: !isActive ? 'not-allowed' : 'pointer', boxShadow: '1px 1px 0 #000', opacity: !isActive ? 0.4 : 1 }}>
           <Calendar size={13} strokeWidth={3} /> TOUR
         </button>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => { const url = getBrochureUrl(pg.name); if (url) window.open(url, '_blank'); }} title="Download Brochure"
-            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: '#000', cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
+          <button onClick={!isActive ? undefined : () => { const url = getBrochureUrl(pg.name); if (url) window.open(url, '_blank'); }} title="Download Brochure"
+            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: '#000', cursor: !isActive ? 'not-allowed' : 'pointer', boxShadow: '1px 1px 0 #000', opacity: !isActive ? 0.4 : 1 }}>
             <FileText size={14} strokeWidth={3} />
           </button>
-          <button onClick={copyWA} title="Copy WhatsApp Offer"
-            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedWA ? '#16A34A' : '#000', cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
+          <button onClick={!isActive ? undefined : copyWA} title="Copy WhatsApp Offer"
+            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedWA ? '#16A34A' : '#000', cursor: !isActive ? 'not-allowed' : 'pointer', boxShadow: '1px 1px 0 #000', opacity: !isActive ? 0.4 : 1 }}>
             {copiedWA ? <Check size={14} strokeWidth={3} /> : <DollarSign size={14} strokeWidth={3} />}
           </button>
-          <button onClick={copyMap} title="Copy Map Location"
-            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedMap ? '#16A34A' : '#000', cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
+          <button onClick={!isActive ? undefined : copyMap} title="Copy Map Location"
+            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedMap ? '#16A34A' : '#000', cursor: !isActive ? 'not-allowed' : 'pointer', boxShadow: '1px 1px 0 #000', opacity: !isActive ? 0.4 : 1 }}>
             {copiedMap ? <Check size={14} strokeWidth={3} /> : <MapPin size={14} strokeWidth={3} />}
           </button>
         </div>
@@ -349,6 +382,34 @@ const PropertyCard = ({
           style={{ flex: isList ? 'none' : 1, background: 'none', border: 'none', padding: '8px', fontSize: 11, color: T.t2, fontWeight: 600, cursor: 'pointer' }}>
           {expanded ? 'Hide' : 'Details'}
         </button>
+
+        {/* Enable / Disable — Admin only */}
+        {isAdmin && (
+          <button
+            onClick={handleToggleStatus}
+            disabled={togglingStatus}
+            title={isActive ? 'Disable this PG' : 'Enable this PG'}
+            style={{
+              background: isActive ? T.redD : T.greenD,
+              border: `1.5px solid ${isActive ? T.red : T.green}`,
+              borderRadius: 8,
+              padding: '8px 12px',
+              fontSize: 10,
+              fontWeight: 900,
+              color: isActive ? T.red : T.green,
+              cursor: togglingStatus ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              flexShrink: 0,
+              opacity: togglingStatus ? 0.6 : 1,
+              transition: 'all 0.15s',
+            }}
+          >
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: isActive ? T.red : T.green, display: 'inline-block' }} />
+            {togglingStatus ? '...' : isActive ? 'DISABLE' : 'ENABLE'}
+          </button>
+        )}
       </div>
 
       {/* Details Drawer */}
@@ -390,20 +451,23 @@ const PropertyCard = ({
 
 // ─── MAIN PAGE ────────────────────────────────────────
 export default function InventoryPage() {
-  const [pgDataLive, setPgDataLive]           = useState<PGEntry[]>(PG_DATA);
-  const [isSyncing, setIsSyncing]             = useState(false);
-  const [search, setSearch]                   = useState('');
-  const [areaFilter, setAreaFilter]           = useState('All');
-  const [cityZoneFilter, setCityZoneFilter]   = useState('All');
-  const [subAreaFilter, setSubAreaFilter]     = useState('All');
-  const [genderFilter, setGenderFilter]       = useState('All');
-  const [statusFilter, setStatusFilter]       = useState<string>('All');
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'manager';
+
+  const [pgDataLive, setPgDataLive] = useState<PGEntry[]>(PG_DATA);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [areaFilter, setAreaFilter] = useState('All');
+  const [cityZoneFilter, setCityZoneFilter] = useState('All');
+  const [subAreaFilter, setSubAreaFilter] = useState('All');
+  const [genderFilter, setGenderFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
   const [areaSidebarSearch, setAreaSidebarSearch] = useState('');
-  const [areaDrawerOpen, setAreaDrawerOpen]   = useState(false);
+  const [areaDrawerOpen, setAreaDrawerOpen] = useState(false);
 
   const { snapshot, getRoom, scheduleVisit, getPGStats, getGlobalStats } = useRoomStore();
   const [visitTarget, setVisitTarget] = useState<PGEntry | null>(null);
-  const [viewMode, setViewMode]       = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -416,12 +480,12 @@ export default function InventoryPage() {
           fetch('/api/sheets/master')
         ]);
 
-        let masterData: PGEntry[]       = [];
-        let inactiveNames: Set<string>  = new Set();
+        let masterData: PGEntry[] = [];
+        let inactiveNames: Set<string> = new Set();
 
         if (masterRes.ok) {
           const masterJson = await masterRes.json();
-          masterData    = masterJson.active ?? [];
+          masterData = masterJson.active ?? [];
           inactiveNames = new Set((masterJson.inactiveNames ?? []).map((n: string) => n.toLowerCase()));
         } else {
           const errText = await masterRes.text();
@@ -429,10 +493,10 @@ export default function InventoryPage() {
           toast.error(`Master sheet error: ${masterRes.status}`);
         }
 
-        const filteredIQ   = iqData.filter(p => !inactiveNames.has(p.name.toLowerCase()));
-        const iqNames      = new Set(filteredIQ.map(p => p.name.toLowerCase()));
+        const filteredIQ = iqData.filter(p => !inactiveNames.has(p.name.toLowerCase()));
+        const iqNames = new Set(filteredIQ.map(p => p.name.toLowerCase()));
         const uniqueMaster = masterData.filter(p => !iqNames.has(p.name.toLowerCase()));
-        const combined     = [...filteredIQ, ...uniqueMaster];
+        const combined = [...filteredIQ, ...uniqueMaster];
 
         if (combined.length > 0) {
           setPgDataLive(combined);
@@ -453,6 +517,9 @@ export default function InventoryPage() {
 
   const filtered = useMemo(() => {
     return pgDataLive.filter(p => {
+      // Non-admins never see disabled PGs
+      if (!isAdmin && p.isActive === false) return false;
+
       const q = search.toLowerCase();
       const matchSearch = !q || (p.name || '').toLowerCase().includes(q) || (p.area || '').toLowerCase().includes(q);
       const normalize = (s: string) => (s || '').toLowerCase().replace(/[\s-]/g, '');
@@ -465,7 +532,7 @@ export default function InventoryPage() {
 
       let matchArea = true;
       if (areaFilter !== 'All') {
-        const qz    = normalize(areaFilter);
+        const qz = normalize(areaFilter);
         const pzArea = normalize(p.area || p.locality || '');
         matchArea = pzArea.includes(qz);
       }
@@ -484,15 +551,15 @@ export default function InventoryPage() {
       let matchStatus = true;
       if (statusFilter !== 'All') {
         const pgRooms = getRoomsForPG(p.id);
-        const states  = pgRooms.map(r => getRoom(r));
-        if (statusFilter === 'LIVE')     matchStatus = states.some(s => s.status === 'APPROVED');
-        else if (statusFilter === 'SCHED')    matchStatus = states.some(s => s.status === 'SOFT_LOCKED');
+        const states = pgRooms.map(r => getRoom(r));
+        if (statusFilter === 'LIVE') matchStatus = states.some(s => s.status === 'APPROVED');
+        else if (statusFilter === 'SCHED') matchStatus = states.some(s => s.status === 'SOFT_LOCKED');
         else if (statusFilter === 'OCCUPIED') matchStatus = states.some(s => s.status === 'OCCUPIED');
       }
 
       return matchSearch && matchCityZone && matchArea && matchSubArea && matchGender && matchStatus;
     });
-  }, [search, cityZoneFilter, areaFilter, subAreaFilter, genderFilter, statusFilter, getRoom, pgDataLive]);
+  }, [search, cityZoneFilter, areaFilter, subAreaFilter, genderFilter, statusFilter, getRoom, pgDataLive, isAdmin]);
 
   const stats = useMemo(() => getGlobalStats(ROOM_MASTER), [getGlobalStats, snapshot]);
 
@@ -518,6 +585,10 @@ export default function InventoryPage() {
     toast.success('Tour scheduled');
   };
 
+  const handleToggleStatus = useCallback((id: number, newStatus: boolean) => {
+    setPgDataLive(prev => prev.map(p => (p.id === id ? { ...p, isActive: newStatus } : p)));
+  }, []);
+
   // ─── SHARED AREA LIST (used in both sidebar and mobile drawer) ────────────
   const AreaList = ({ onSelect }: { onSelect?: () => void }) => (
     <>
@@ -536,7 +607,7 @@ export default function InventoryPage() {
         All Areas
       </button>
       {sidebarAreas.map(area => {
-        const count    = pgDataLive.filter(p => (p.area || '').toLowerCase() === area.toLowerCase()).length;
+        const count = pgDataLive.filter(p => (p.area || '').toLowerCase() === area.toLowerCase()).length;
         const isActive = areaFilter === area;
         return (
           <button key={area} onClick={() => { setAreaFilter(isActive ? 'All' : area); onSelect?.(); }}
@@ -662,6 +733,8 @@ export default function InventoryPage() {
                   <PropertyCard key={pg.id} pg={pg} idx={idx}
                     pgRooms={pgRooms}
                     viewMode={viewMode}
+                    isAdmin={isAdmin}
+                    onToggleStatus={handleToggleStatus}
                     onScheduleVisit={() => setVisitTarget(pg)} />
                 );
               })}

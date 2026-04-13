@@ -1,13 +1,14 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IProperty extends Document {
-  name: string;
-  city: string;
-  area: string;
-  address: string;
+  pgId?: number;          // ← ADD
+  name?: string;
+  city?: string;
+  area?: string;
+  address?: string;
   description?: string;
   photos: string[];
-  ownerId: mongoose.Types.ObjectId;
+  ownerId?: mongoose.Types.ObjectId;
   isActive: boolean;
   rating?: number;
   genderAllowed: 'any' | 'male' | 'female';
@@ -19,18 +20,19 @@ export interface IProperty extends Document {
 
 const PropertySchema: Schema = new Schema(
   {
-    name: { type: String, required: true },
-    city: { type: String, required: true },
-    area: { type: String, required: true },
-    address: { type: String, required: true },
-    description: { type: String },
-    photos: [{ type: String }],
-    ownerId: { type: Schema.Types.ObjectId, ref: 'Owner', required: true },
-    isActive: { type: Boolean, default: true },
-    rating: { type: Number, default: 0 },
-    genderAllowed: { type: String, enum: ['any', 'male', 'female'], default: 'any' },
-    isVerified: { type: Boolean, default: false },
-    priceRange: { type: String },
+    pgId:         { type: Number, unique: true, sparse: true },  // ← ADD
+    name:         { type: String },
+    city:         { type: String },
+    area:         { type: String },
+    address:      { type: String },
+    description:  { type: String },
+    photos:       [{ type: String }],
+    ownerId:      { type: Schema.Types.ObjectId, ref: 'Owner' },
+    isActive:     { type: Boolean, default: true },
+    rating:       { type: Number, default: 0 },
+    genderAllowed:{ type: String, enum: ['any', 'male', 'female'], default: 'any' },
+    isVerified:   { type: Boolean, default: false },
+    priceRange:   { type: String },
   },
   { timestamps: true }
 );

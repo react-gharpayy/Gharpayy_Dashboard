@@ -114,24 +114,25 @@ export async function GET() {
     const name = getVal(1); // Col B
     if (!name) continue;
 
-    if (isRedCell(getColor(1))) {
+    const pgIsActive = !isRedCell(getColor(1));
+    if (!pgIsActive) {
       inactiveNames.push(name.toLowerCase());
-      continue;
+      // Don't continue — fall through and push with isActive: false
     }
 
-    const rawArea     = getVal(2);   // Col C — AREA
-    const area        = normalizeArea(rawArea);
-    const locality    = getVal(3);   // Col D — LOCALITY
-    const usp         = getVal(6);   // Col G — USP
-    const vacant      = getVal(8);   // Col I — VACANT
-    const priceLows   = getVal(9);   // Col J — LOWS
-    const waMsg       = getRaw(11);  // Col L — WA message (preserve newlines)
-    const food        = getVal(14);  // Col O — FOOD
-    const mapsLink    = getVal(17);  // Col R — MAPS LINK
+    const rawArea = getVal(2);   // Col C — AREA
+    const area = normalizeArea(rawArea);
+    const locality = getVal(3);   // Col D — LOCALITY
+    const usp = getVal(6);   // Col G — USP
+    const vacant = getVal(8);   // Col I — VACANT
+    const priceLows = getVal(9);   // Col J — LOWS
+    const waMsg = getRaw(11);  // Col L — WA message (preserve newlines)
+    const food = getVal(14);  // Col O — FOOD
+    const mapsLink = getVal(17);  // Col R — MAPS LINK
     const locationMsg = formatLocationMsg(getRaw(13)); // Col N — LOCATION MSG
-    const exactName   = getVal(16);  // Col Q — EXACT NAME
+    const exactName = getVal(16);  // Col Q — EXACT NAME
     const managerContact = getVal(20); // Col T
-    const managerName    = getVal(21); // Col U
+    const managerName = getVal(21); // Col U
 
     const genderRaw = name + ' ' + locality;
     let gender = 'Co-live';
@@ -179,6 +180,7 @@ export async function GET() {
       waTemplate: waMsg,
       subArea: rawArea || area,
       exactName,
+      isActive: pgIsActive,
     });
     idx++;
   }

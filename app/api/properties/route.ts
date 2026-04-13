@@ -8,9 +8,15 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const ownerId = searchParams.get('ownerId');
-    
+
     await connectToDatabase();
-    const query: any = { isActive: true };
+    const { getAuthUserFromCookie } = await import('@/lib/auth');
+    const authUser = await getAuthUserFromCookie();
+    const isAdmin = authUser?.role === 'super_admin' || authUser?.role === 'admin' || authUser?.role === 'manager';
+
+    const query: any = {};
+    if (!isAdmin) query.isActive = true;   // users only see active PGs
+    if (ownerId) query.ownerId = ownerId;
     if (ownerId) query.ownerId = ownerId;
 
     // Populate owner info and rooms/beds for owner portal
@@ -21,7 +27,7 @@ export async function GET(req: Request) {
         populate: { path: 'beds' }
       })
       .sort({ name: 1 });
-    
+
     // Transform to match frontend expected structure
     const transformedProperties = await Promise.all(properties.map(async (p) => {
       const rooms = await Room.find({ propertyId: p._id }).populate('beds');

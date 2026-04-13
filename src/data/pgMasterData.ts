@@ -41,6 +41,7 @@ export interface PGEntry {
   waTemplate?: string;
   subArea?: string;
   locationMsg?: string;
+  isActive?: boolean;
 }
 
 export const PG_DATA: PGEntry[] = rawData as PGEntry[];
