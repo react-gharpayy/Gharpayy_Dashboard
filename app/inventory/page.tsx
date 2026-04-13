@@ -239,6 +239,7 @@ const PropertyCard = ({
     e.stopPropagation();
     if (!pg.id || togglingStatus) return;
     setTogglingStatus(true);
+    console.log('Toggling:', pg.name, '| id:', pg.id, '| pid:', pg.pid); // ADD THIS
     try {
       const res = await fetch(`/api/properties/${pg.id}/status`, {
         method: 'PATCH',
@@ -477,8 +478,19 @@ export default function InventoryPage() {
       try {
         const [iqData, masterRes] = await Promise.all([
           fetchLivePGData(),
-          fetch('/api/sheets/master')
+          fetch('/api/sheets/master'),
         ]);
+
+        // fetch status after sheets done — retry once if auth not ready
+        let statusRes = await fetch('/api/properties/status', {
+          credentials: 'include'
+        });
+        if (!statusRes.ok) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          statusRes = await fetch('/api/properties/status', {
+            credentials: 'include'
+          });
+        }
 
         let masterData: PGEntry[] = [];
         let inactiveNames: Set<string> = new Set();
@@ -493,10 +505,22 @@ export default function InventoryPage() {
           toast.error(`Master sheet error: ${masterRes.status}`);
         }
 
-        const filteredIQ = iqData.filter(p => !inactiveNames.has(p.name.toLowerCase()));
+        const filteredIQ = iqData.map(p => ({
+          ...p,
+          isActive: inactiveNames.has(p.name.toLowerCase()) ? false : p.isActive,
+        }));
         const iqNames = new Set(filteredIQ.map(p => p.name.toLowerCase()));
         const uniqueMaster = masterData.filter(p => !iqNames.has(p.name.toLowerCase()));
         const combined = [...filteredIQ, ...uniqueMaster];
+
+        if (statusRes.ok) {
+          const statusMap: Record<number, boolean> = await statusRes.json();
+          combined.forEach(p => {
+            if (p.id !== undefined && statusMap[p.id] !== undefined) {
+              p.isActive = statusMap[p.id];
+            }
+          });
+        }
 
         if (combined.length > 0) {
           setPgDataLive(combined);
@@ -514,7 +538,6 @@ export default function InventoryPage() {
     };
     sync();
   }, []);
-
   const filtered = useMemo(() => {
     return pgDataLive.filter(p => {
       // Non-admins never see disabled PGs
