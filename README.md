@@ -25,15 +25,6 @@ npm install
 ```env
 MONGODB_URI=mongodb://localhost:27017/dashboard
 JWT_SECRET=replace_with_a_strong_secret
-ADMIN_USERNAME=admin@example.com
-ADMIN_PASSWORD=replace_with_a_strong_password
-
-# Google Sheets lead sync
-ENABLE_GOOGLE_LEADS_SYNC=true
-GOOGLE_SHEETS_LEADS_SPREADSHEET_ID=your_google_sheet_id
-GOOGLE_SHEETS_LEADS_SHEET_NAME=Leads
-GOOGLE_SERVICE_ACCOUNT_EMAIL=service-account@project.iam.gserviceaccount.com
-GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\nreplace_with_your_private_key\\n-----END PRIVATE KEY-----\\n"
 ```
 
 If you prefer, you can copy [.env.example](.env.example) and replace the placeholders with your production values.
