@@ -1,3 +1,4 @@
+import { number } from 'framer-motion';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ILead extends Document {
@@ -16,7 +17,7 @@ export interface ILead extends Document {
   createdBy?: mongoose.Types.ObjectId;
   propertyId?: mongoose.Types.ObjectId;
   preferredLocation?: string;
-  budget?: string;
+  budget?: number;
   moveInDate?: string;
   profession?: string;
   roomType?: string;
@@ -46,7 +47,7 @@ const LeadSchema: Schema = new Schema(
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
     propertyId: { type: Schema.Types.ObjectId, ref: 'Property' },
     preferredLocation: { type: String },
-    budget: { type: String },
+    budget: { type: Number},
     moveInDate: { type: String },
     profession: { type: String },
     roomType: { type: String },

@@ -20,19 +20,24 @@ export interface IProperty extends Document {
 
 const PropertySchema: Schema = new Schema(
   {
-    pgId:         { type: Number, unique: true, sparse: true },  // ← ADD
-    name:         { type: String },
-    city:         { type: String },
-    area:         { type: String },
-    address:      { type: String },
-    description:  { type: String },
-    photos:       [{ type: String }],
-    ownerId:      { type: Schema.Types.ObjectId, ref: 'Owner' },
-    isActive:     { type: Boolean, default: true },
-    rating:       { type: Number, default: 0 },
-    genderAllowed:{ type: String, enum: ['any', 'male', 'female'], default: 'any' },
-    isVerified:   { type: Boolean, default: false },
-    priceRange:   { type: String },
+    pgId: { type: Number, unique: true, sparse: true },  // ← ADD
+    name: { type: String },
+    city: { type: String },
+    area: { type: String },
+    address: { type: String },
+    description: { type: String },
+    photos: [{ type: String }],
+    ownerId: { type: Schema.Types.ObjectId, ref: 'Owner' },
+    isActive: { type: Boolean, default: true },
+    rating: { type: Number, default: 0 },
+    genderAllowed: { type: String, enum: ['any', 'male', 'female'], default: 'any' },
+    isVerified: { type: Boolean, default: false },
+    priceRange: { type: String },
+    singlePrice: { type: Number },
+    doublePrice: { type: Number },
+    triplePrice: { type: Number },
+    food: { type: String, enum: ['veg', 'non-veg', 'both'] },
+    propertyType: { type: String, enum: ['pg', 'coliving'], default: 'pg' },
   },
   { timestamps: true }
 );

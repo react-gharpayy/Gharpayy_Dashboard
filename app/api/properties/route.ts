@@ -10,22 +10,32 @@ export async function GET(req: Request) {
     const ownerId = searchParams.get('ownerId');
 
     await connectToDatabase();
-    const { getAuthUserFromCookie } = await import('@/lib/auth');
-    const authUser = await getAuthUserFromCookie();
-    const isAdmin = authUser?.role === 'super_admin' || authUser?.role === 'admin' || authUser?.role === 'manager';
+    let authUser = null;
+
+    try {
+      const { getAuthUserFromCookie } = await import('@/lib/auth');
+      authUser = await getAuthUserFromCookie();
+    } catch (e) {
+      console.error("Auth error:", e);
+    }
+
+    const isAdmin =
+      authUser?.role === 'super_admin' ||
+      authUser?.role === 'admin' ||
+      authUser?.role === 'manager';
 
     const query: any = {};
-    if (!isAdmin) query.isActive = true;   // users only see active PGs
-    if (ownerId) query.ownerId = ownerId;
+
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!isAdmin) query.isActive = true;
     if (ownerId) query.ownerId = ownerId;
 
     // Populate owner info and rooms/beds for owner portal
     const properties = await Property.find(query)
       .populate('ownerId')
-      .populate({
-        path: 'rooms',
-        populate: { path: 'beds' }
-      })
       .sort({ name: 1 });
 
     // Transform to match frontend expected structure
