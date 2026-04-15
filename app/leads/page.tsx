@@ -1,5 +1,5 @@
 "use client";
-
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import AppLayout from '@/components/AppLayout';
@@ -121,7 +121,7 @@ const Leads = () => {
   const [page, setPage] = useState(0);
   const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<LeadWithRelations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  
+
   const [filterDateMode, setFilterDateMode] = useState<'newest' | 'oldest' | 'alphabetical' | 'date' | 'month' | 'today' | 'date_range'>('newest');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterMonth, setFilterMonth] = useState<string>('');
@@ -223,12 +223,12 @@ const Leads = () => {
     filterDateMode === 'today'
       ? 'today'
       : (
-          (filterDateMode === 'date' && !!filterDate) ||
-          (filterDateMode === 'month' && !!monthRange) ||
-          (filterDateMode === 'date_range' && hasValidCustomRange)
-        )
-          ? 'custom'
-          : 'all';
+        (filterDateMode === 'date' && !!filterDate) ||
+        (filterDateMode === 'month' && !!monthRange) ||
+        (filterDateMode === 'date_range' && hasValidCustomRange)
+      )
+        ? 'custom'
+        : 'all';
 
   const fromForDateFilter =
     filterDateMode === 'date'
@@ -263,9 +263,16 @@ const Leads = () => {
   useEffect(() => {
     setPage(0);
   }, [debouncedSearchQuery, filterSource, filterStatus, filterDuplicate, filterZone, filterDateMode, filterDate, filterMonth, fromDate, toDate, hasValidCustomRange]);
-  
+
   const PAGE_SIZE = 50;
   const { data: paginatedData, isLoading } = useLeadsPaginated(page, PAGE_SIZE, serverFilters);
+  const { data: leadsWithMatches = [] } = useQuery({
+    queryKey: ["leads-with-matches"],
+    queryFn: async () => {
+      const res = await fetch("/api/leads/with-matches");
+      return res.json();
+    },
+  });
   const leads = paginatedData?.leads;
   const totalLeads = paginatedData?.total ?? 0;
   const totalPages = Math.ceil(totalLeads / PAGE_SIZE);
@@ -343,7 +350,7 @@ const Leads = () => {
         filterZone !== 'assigned_to_me' &&
         (l as any).zone !== filterZone
       ) return false;
-      
+
       return true;
     });
 
@@ -566,12 +573,12 @@ const Leads = () => {
         tourTime: Number.isNaN(scheduledAt.getTime())
           ? 'Scheduled'
           : scheduledAt.toLocaleString('en-GB', {
-              day: '2-digit',
-              month: 'short',
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true,
-            }),
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          }),
         tourMode: extractMeta(notes, 'tour_mode') || 'physical',
         remarks: String(existingVisit?.scheduleRemarks || decodedRemarks || '').trim(),
       });
@@ -723,8 +730,8 @@ const Leads = () => {
 
           {/* Desktop Filters */}
           <div className="hidden md:flex items-center gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <Input 
-              placeholder="Search Name, Phone, ID..." 
+            <Input
+              placeholder="Search Name, Phone, ID..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="h-7 text-[10px] rounded-xl w-40 bg-card border-border"
@@ -835,19 +842,19 @@ const Leads = () => {
                 </PopoverContent>
               </Popover>
             )}
-            
+
             {filterDateMode === 'date' && (
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={filterDate}
                 onChange={e => setFilterDate(e.target.value)}
                 className="shrink-0 text-[10px] bg-card border border-border rounded-xl px-2 py-1.5 text-foreground outline-none focus:ring-2 focus:ring-ring/30"
               />
             )}
-            
+
             {filterDateMode === 'month' && (
-              <input 
-                type="month" 
+              <input
+                type="month"
                 value={filterMonth}
                 onChange={e => setFilterMonth(e.target.value)}
                 className="shrink-0 text-[10px] bg-card border border-border rounded-xl px-2 py-1.5 text-foreground outline-none focus:ring-2 focus:ring-ring/30"
@@ -863,8 +870,8 @@ const Leads = () => {
         {/* Mobile Filters Expanded */}
         {showFiltersMobile && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="flex md:hidden flex-col gap-2 p-3 bg-secondary/30 rounded-xl border border-border">
-            <Input 
-              placeholder="Search Name, Phone, ID..." 
+            <Input
+              placeholder="Search Name, Phone, ID..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="h-7 text-[10px] rounded-lg w-full bg-card border-border"
@@ -995,7 +1002,7 @@ const Leads = () => {
       )}
 
       {/* ═══════════════════════════════════════════════════════════ */}
-      {/*  LEAD CARDS — NEW UI                                       */}
+      {/*  LEAD CARDS                                                */}
       {/* ═══════════════════════════════════════════════════════════ */}
       <style>{`
         :root {
@@ -1037,6 +1044,14 @@ const Leads = () => {
         {filtered.map(lead => {
           const m = mapLeadMeta(lead);
           const isExpanded = expandedId === lead.id;
+
+          // ✅ FIX 1: leadsMap removed — use direct find instead
+          const leadData =
+            leadsWithMatches.find((l: any) => (l._id || l.id) === lead.id) || {};
+
+          const bestPGs = (leadData.bestPGs || []) as any[];
+          const morePGs = (leadData.morePGs || []) as any[];
+
           const isDuplicateLead = !!lead.isDuplicate;
           const sBadge = statusBadgeConfig[lead.status] || statusBadgeConfig.new;
           const stageLabel = pipelineStages.find((s: any) => s.key === lead.status)?.label || lead.status;
@@ -1058,8 +1073,8 @@ const Leads = () => {
             ? m.budgetRanges.map((r: any) => r.display).join(', ')
             : lead.budget || '';
 
+          // ─── COLLAPSED CARD ───
           if (!isExpanded) {
-            // ─── COLLAPSED CARD ───
             return (
               <div
                 key={lead.id}
@@ -1111,7 +1126,7 @@ const Leads = () => {
                     {/* Row 1: Name + Badges */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap', paddingBottom: 4 }}>
                       <h3 className="lc-name" style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-hi)', margin: 0, fontFamily: 'var(--lc-sans)', paddingRight: 2 }}>{lead.name}</h3>
-                      
+
                       {m.need && (
                         <>
                           <span style={{ color: 'var(--lc-line2)' }}>|</span>
@@ -1130,7 +1145,7 @@ const Leads = () => {
                           </span>
                         </>
                       )}
-                      
+
                       {m.zones.length > 0 && <span style={{ color: 'var(--lc-line2)' }}>|</span>}
                       {m.zones.map((z: string) => <ZonePill key={z} zoneName={z} xs />)}
 
@@ -1202,12 +1217,41 @@ const Leads = () => {
                         </>
                       )}
                     </div>
+                    {/* 🔥 Best PGs (Collapsed) */}
+                    <div style={{ marginTop: 6 }}>
+                      <div style={{ fontSize: 9, color: 'var(--lc-dim)', marginBottom: 2 }}>
+                        Best PGs
+                      </div>
+
+                      {bestPGs.length === 0 ? (
+                        <div style={{ fontSize: 9, color: 'var(--lc-dim)' }}>
+                          No matches
+                        </div>
+                      ) : (
+                        bestPGs.slice(0, 3).map((pg: any) => (
+                          <div
+                            key={pg.id}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              fontSize: 9,
+                              padding: '2px 6px',
+                              background: 'var(--lc-bg2)',
+                              borderRadius: 4,
+                              marginBottom: 2,
+                            }}
+                          >
+                            <span>{pg.name}</span>
+                            <span>{pg.score}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
 
                   {/* Quick actions on collapsed */}
                   <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2, alignItems: 'flex-end' }}>
 
-                    {/* Keep progress bar on the top row */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, width: '100%', flexWrap: 'wrap' }}>
                       <div style={{ width: 40, height: 4, background: 'var(--lc-bg3)', borderRadius: 2, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${progress}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
@@ -1227,27 +1271,26 @@ const Leads = () => {
                       <a href={`tel:${lead.phone}`} style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex' }} title="Call">
                         <PhoneCall size={10} color="var(--lc-mid)" />
                       </a>
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           if (isAssignedByMeReadOnly) return;
                           setExpandedId(lead.id);
-                        }} 
-                        style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
+                        }}
+                        style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }}
                         title="Expand"
                       >
                         <ChevronDown size={10} color="var(--lc-mid)" />
                       </button>
                     </div>
 
-                    {/* Lower row: WhatsApp, more options, and timestamp */}
                     <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
                       <span className="lc-timestamp" style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', whiteSpace: 'nowrap' }}>
                         {createdAtStamp}
                       </span>
-                      <button 
+                      <button
                         onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`); toast.success('WhatsApp link copied!'); }}
-                        style={{ padding: 4, borderRadius: 5, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }} 
+                        style={{ padding: 4, borderRadius: 5, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }}
                         title="Copy WhatsApp API"
                       >
                         <MessageCircle size={10} color="#22c55e" />
@@ -1286,7 +1329,6 @@ const Leads = () => {
           const currentStageIndex = pipelineStages.findIndex((s: any) => s.key === lead.status);
           const stageIdx = currentStageIndex !== -1 ? currentStageIndex : 0;
 
-          // Theme object using CSS vars (respects dark mode)
           const D = {
             bg1: 'var(--lc-bg1)',
             bg2: 'var(--lc-bg2)',
@@ -1341,7 +1383,7 @@ const Leads = () => {
                       {/* Row 1: Name + Badges */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap', paddingBottom: 4 }}>
                         <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-hi)', margin: 0, fontFamily: 'var(--lc-sans)', paddingRight: 2 }}>{lead.name}</h3>
-                        
+
                         {m.need && (
                           <>
                             <span style={{ color: 'var(--lc-line2)' }}>|</span>
@@ -1360,7 +1402,7 @@ const Leads = () => {
                             </span>
                           </>
                         )}
-                        
+
                         {m.zones.length > 0 && <span style={{ color: 'var(--lc-line2)' }}>|</span>}
                         {m.zones.map((z: string) => <ZonePill key={z} zoneName={z} xs />)}
 
@@ -1432,10 +1474,61 @@ const Leads = () => {
                           </>
                         )}
                       </div>
+
+                      {/* ✅ FIX 4+5+6: Fixed expanded PG block — uses [...bestPGs, ...morePGs].length check */}
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 10, color: 'var(--lc-mid)', marginBottom: 4 }}>
+                          Best PG Matches
+                        </div>
+
+                        {[...bestPGs, ...morePGs].length === 0 ? (
+                          <div style={{ fontSize: 10, color: 'var(--lc-dim)' }}>
+                            No matches found
+                          </div>
+                        ) : (
+                          [...bestPGs, ...morePGs].map((pg: any, index: number) => {
+                            let label = 'Other';
+                            let color = '#6b7280';
+
+                            if (index < 3) {
+                              label = 'Best';
+                              color = '#22c55e';
+                            } else if (index < 6) {
+                              label = 'Good';
+                              color = '#eab308';
+                            }
+
+                            return (
+                              <div
+                                key={pg.id}
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  fontSize: 10,
+                                  padding: '4px 8px',
+                                  background: index === 0 ? 'rgba(34,197,94,0.12)' : 'var(--lc-bg2)',
+                                  border: index === 0 ? '1px solid #22c55e' : '1px solid transparent',
+                                  borderRadius: 6,
+                                  marginBottom: 3,
+                                }}
+                              >
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span style={{ fontWeight: index === 0 ? 700 : 500 }}>
+                                    {pg.name} · {pg.area}
+                                  </span>
+                                  <span style={{ fontSize: 8, color }}>{label}</span>
+                                </div>
+                                <span style={{ fontWeight: 600 }}>{pg.score}</span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Right side — same compact layout as collapsed */}
+                  {/* Right side — compact actions */}
                   <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2, alignItems: 'flex-end' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, width: '100%', flexWrap: 'wrap' }}>
                       <div style={{ width: 40, height: 4, background: 'var(--lc-bg3)', borderRadius: 2, overflow: 'hidden' }}>
@@ -1456,9 +1549,9 @@ const Leads = () => {
                       <a href={`tel:${lead.phone}`} style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex' }} title="Call">
                         <PhoneCall size={10} color="var(--lc-mid)" />
                       </a>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setExpandedId(''); }} 
-                        style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setExpandedId(''); }}
+                        style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }}
                         title="Collapse"
                       >
                         <ChevronUp size={10} color="var(--lc-mid)" />
@@ -1469,13 +1562,13 @@ const Leads = () => {
                       <span className="lc-timestamp" style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', whiteSpace: 'nowrap' }}>
                         {createdAtStamp}
                       </span>
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           navigator.clipboard.writeText(`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`);
                           toast.success('WhatsApp link copied!');
                         }}
-                        style={{ padding: 4, borderRadius: 5, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }} 
+                        style={{ padding: 4, borderRadius: 5, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }}
                         title="Copy WhatsApp API"
                       >
                         <MessageCircle size={10} color="#22c55e" />
@@ -1577,7 +1670,7 @@ const Leads = () => {
                 </div>
               </div>
 
-              {/* ─── Details Grid (Dynamic Dense) ─── */}
+              {/* ─── Details Grid ─── */}
               <div className="lc-expand-grid" style={{
                 display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
                 gap: 1, background: D.line, margin: '6px 16px 0', borderRadius: 10, overflow: 'hidden',
@@ -1686,8 +1779,6 @@ const Leads = () => {
 
                 {/* Geo Intelligence */}
                 <GeoIntelPanel lead={{ location: lead.preferredLocation, rawText: '', areas: m.areas }} />
-
-
               </div>
             </motion.div>
           );
@@ -1759,98 +1850,98 @@ const Leads = () => {
               ) : null}
             </div>
           ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Lead</Label>
-              <Input value={scheduleLeadName} readOnly className="h-8 text-xs bg-muted/40" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Phone Number</Label>
-              <Input
-                value={schedulePhone}
-                onChange={(e) => setSchedulePhone(e.target.value)}
-                placeholder="Enter phone number"
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs">Property</Label>
-              <Input
-                value={schedulePropertyName}
-                onChange={(e) => setSchedulePropertyName(e.target.value)}
-                placeholder="Type property name"
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Zone</Label>
-              <select
-                value={scheduleZoneId}
-                onChange={(e) => setScheduleZoneId(e.target.value)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-              >
-                {(officeZones || []).map((zone: any) => (
-                  <option key={String(zone._id || zone.id)} value={String(zone._id || zone.id)}>{String(zone.name || '')}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Assign To (TCM)</Label>
-              <div className="relative">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Lead</Label>
+                <Input value={scheduleLeadName} readOnly className="h-8 text-xs bg-muted/40" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Phone Number</Label>
                 <Input
-                  value={scheduleAssignedSearch}
-                  onChange={(e) => handleAssignedSearchChange(e.target.value)}
-                  onFocus={() => setShowAssignedOptions(true)}
-                  onBlur={() => setTimeout(() => setShowAssignedOptions(false), 120)}
-                  placeholder="Type member name..."
+                  value={schedulePhone}
+                  onChange={(e) => setSchedulePhone(e.target.value)}
+                  placeholder="Enter phone number"
                   className="h-8 text-xs"
                 />
-                {showAssignedOptions && filteredMemberOptions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 z-50 max-h-44 overflow-auto rounded-md border border-border bg-popover p-1 shadow-md">
-                    {filteredMemberOptions.map((member) => (
-                      <button
-                        key={member.id}
-                        type="button"
-                        className="w-full rounded-sm px-2 py-1.5 text-left text-xs text-popover-foreground hover:bg-accent/20"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => handleAssignedSelect(member)}
-                      >
-                        {member.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs">Property</Label>
+                <Input
+                  value={schedulePropertyName}
+                  onChange={(e) => setSchedulePropertyName(e.target.value)}
+                  placeholder="Type property name"
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Zone</Label>
+                <select
+                  value={scheduleZoneId}
+                  onChange={(e) => setScheduleZoneId(e.target.value)}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                >
+                  {(officeZones || []).map((zone: any) => (
+                    <option key={String(zone._id || zone.id)} value={String(zone._id || zone.id)}>{String(zone.name || '')}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Assign To (TCM)</Label>
+                <div className="relative">
+                  <Input
+                    value={scheduleAssignedSearch}
+                    onChange={(e) => handleAssignedSearchChange(e.target.value)}
+                    onFocus={() => setShowAssignedOptions(true)}
+                    onBlur={() => setTimeout(() => setShowAssignedOptions(false), 120)}
+                    placeholder="Type member name..."
+                    className="h-8 text-xs"
+                  />
+                  {showAssignedOptions && filteredMemberOptions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 z-50 max-h-44 overflow-auto rounded-md border border-border bg-popover p-1 shadow-md">
+                      {filteredMemberOptions.map((member) => (
+                        <button
+                          key={member.id}
+                          type="button"
+                          className="w-full rounded-sm px-2 py-1.5 text-left text-xs text-popover-foreground hover:bg-accent/20"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => handleAssignedSelect(member)}
+                        >
+                          {member.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Tour Date</Label>
+                <Input type="date" value={scheduleTourDate} onChange={(e) => setScheduleTourDate(e.target.value)} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Tour Time</Label>
+                <Input type="time" value={scheduleTourTime} onChange={(e) => setScheduleTourTime(e.target.value)} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Tour Mode</Label>
+                <select value={scheduleTourMode} onChange={(e) => setScheduleTourMode(e.target.value as 'physical' | 'virtual')} className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs">
+                  <option value="physical">Physical</option>
+                  <option value="virtual">Virtual</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Budget</Label>
+                <Input type="number" value={scheduleBudget} onChange={(e) => setScheduleBudget(e.target.value)} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs">Remarks</Label>
+                <Input
+                  value={scheduleRemarks}
+                  onChange={(e) => setScheduleRemarks(e.target.value)}
+                  placeholder="Any context for assigned person"
+                  className="h-8 text-xs"
+                />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tour Date</Label>
-              <Input type="date" value={scheduleTourDate} onChange={(e) => setScheduleTourDate(e.target.value)} className="h-8 text-xs" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tour Time</Label>
-              <Input type="time" value={scheduleTourTime} onChange={(e) => setScheduleTourTime(e.target.value)} className="h-8 text-xs" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tour Mode</Label>
-              <select value={scheduleTourMode} onChange={(e) => setScheduleTourMode(e.target.value as 'physical' | 'virtual')} className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs">
-                <option value="physical">Physical</option>
-                <option value="virtual">Virtual</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Budget</Label>
-              <Input type="number" value={scheduleBudget} onChange={(e) => setScheduleBudget(e.target.value)} className="h-8 text-xs" />
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label className="text-xs">Remarks</Label>
-              <Input
-                value={scheduleRemarks}
-                onChange={(e) => setScheduleRemarks(e.target.value)}
-                placeholder="Any context for assigned person"
-                className="h-8 text-xs"
-              />
-            </div>
-          </div>
           )}
 
           <DialogFooter>

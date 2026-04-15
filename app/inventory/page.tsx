@@ -5,12 +5,13 @@
  * ────────────────────────────────────────────────────────
  * Optimized layout: Small by default.
  * Room Inventory and Details both hidden initially to save space.
+ * Mobile-responsive: single column, area drawer, no sidebar crush.
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react'; // Re-build trigger
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { 
-  Search, MapPin, Check, ChevronDown, ChevronUp, 
+import {
+  Search, MapPin, Check, ChevronDown, ChevronUp,
   Calendar, X, LayoutGrid, List, DollarSign, FileText
 } from 'lucide-react';
 import brochureMap from '@/data/brochureMap.json';
@@ -22,8 +23,8 @@ import { AREAS_LIST, getSubAreasForArea, matchPropertyToGeo, GEO_MASTER } from '
 import SearchableSelect from '@/components/SearchableSelect';
 import { toast } from 'sonner';
 import { useRoomStore, type VisitData, type RoomState } from '@/hooks/useInventoryStore';
+import { useAuth } from '@/contexts/AuthContext';
 
-// ─── TOKENS ──────────────────────────────────────────
 const T = {
   bg0: '#F8F9FA', bg1: '#FFFFFF', bg2: '#FFF6F4', bg3: '#FFFFFF', bg4: '#FEF3C7',
   line: '#FEE2E2', lineH: '#FECACA', lineA: '#FCA5A5',
@@ -32,30 +33,39 @@ const T = {
   gold: '#F97316', goldD: 'rgba(249,115,22,0.08)', goldB: 'rgba(249,115,22,0.28)',
   green: '#16A34A', greenD: 'rgba(22,163,74,0.09)', greenB: 'rgba(22,163,74,0.28)',
   amber: '#D97706', amberD: 'rgba(217,119,6,0.09)', amberB: 'rgba(217,119,6,0.28)',
-  red:   '#DC2626', redD:   'rgba(220,38,38,0.09)',  redB:   'rgba(220,38,38,0.28)',
-  blue:  '#2563EB', blueD:  'rgba(37,99,235,0.09)', blueB:  'rgba(37,99,235,0.28)',
-  violet:'#7C3AED', violetD:'rgba(124,58,237,0.09)',violetB:'rgba(124,58,237,0.28)',
+  red: '#DC2626', redD: 'rgba(220,38,38,0.09)', redB: 'rgba(220,38,38,0.28)',
+  blue: '#2563EB', blueD: 'rgba(37,99,235,0.09)', blueB: 'rgba(37,99,235,0.28)',
+  violet: '#7C3AED', violetD: 'rgba(124,58,237,0.09)', violetB: 'rgba(124,58,237,0.28)',
   sans: "'DM Sans', -apple-system, system-ui, sans-serif",
   mono: "'JetBrains Mono', monospace",
 };
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  LOCKED:      { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',   dot: '#22C55E' },
-  AVAILABLE:   { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',   dot: '#22C55E' },
-  APPROVED:    { label: 'Live',       color: '#22C55E', bg: 'rgba(34,197,94,0.1)',   dot: '#22C55E' },
-  SOFT_LOCKED: { label: 'Tour Hold', color: '#60A5FA', bg: 'rgba(96,165,250,0.1)',   dot: '#60A5FA' },
-  HARD_LOCKED: { label: 'Pre-Booked',color: '#A78BFA', bg: 'rgba(167,139,250,0.1)',  dot: '#A78BFA' },
-  OCCUPIED:    { label: 'Occupied',   color: '#EF4444', bg: 'rgba(239,68,68,0.1)',   dot: '#EF4444' },
+  LOCKED: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
+  AVAILABLE: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
+  APPROVED: { label: 'Live', color: '#22C55E', bg: 'rgba(34,197,94,0.1)', dot: '#22C55E' },
+  SOFT_LOCKED: { label: 'Tour Hold', color: '#60A5FA', bg: 'rgba(96,165,250,0.1)', dot: '#60A5FA' },
+  HARD_LOCKED: { label: 'Pre-Booked', color: '#A78BFA', bg: 'rgba(167,139,250,0.1)', dot: '#A78BFA' },
+  OCCUPIED: { label: 'Occupied', color: '#EF4444', bg: 'rgba(239,68,68,0.1)', dot: '#EF4444' },
 };
 
-// ─── HELPERS ─────────────────────────────────────────
+// ─── MOBILE HOOK ──────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
+
 const getMinPrice = (p: PGEntry) => {
   if (p.minPrice && p.minPrice > 5000) return p.minPrice;
   const prices = [p.triplePrice, p.doublePrice, p.singlePrice]
     .filter(v => typeof v === 'number' && v > 5000) as number[];
   if (prices.length > 0) return Math.min(...prices);
-  
-  // Fallback to name match in master data
   const masterMatch = PG_DATA.find(pg => pg.name.toLowerCase() === p.name.toLowerCase());
   if (masterMatch) {
     const mp = [masterMatch.triplePrice, masterMatch.doublePrice, masterMatch.singlePrice]
@@ -70,7 +80,7 @@ const formatPrice = (price: number) => {
   return `from ₹${(price / 1000).toFixed(1)}k/mo`;
 };
 
-const AREAS   = ['All', ...Array.from(new Set(PG_DATA.map(p => p.area).filter(Boolean))).sort()];
+const AREAS = ['All', ...Array.from(new Set(PG_DATA.map(p => p.area).filter(Boolean))).sort()];
 const GENDERS = ['All', 'Boys', 'Girls', 'coed'];
 
 // ─── VISIT SCHEDULING MODAL ──────────────────────────
@@ -113,12 +123,10 @@ const TourModal = ({ pg, onClose, onSchedule }: {
               ))}
             </select>
           </div>
-          
           <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
             <button onClick={() => setTourType('Physical')} style={{ flex: 1, padding: '8px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: `1px solid ${tourType === 'Physical' ? T.blue : T.line}`, background: tourType === 'Physical' ? T.blueD : T.bg3, color: tourType === 'Physical' ? T.blue : T.t1, cursor: 'pointer' }}>Physical Tour</button>
             <button onClick={() => setTourType('Virtual')} style={{ flex: 1, padding: '8px', fontSize: 11, fontWeight: 700, borderRadius: 8, border: `1px solid ${tourType === 'Virtual' ? T.blue : T.line}`, background: tourType === 'Virtual' ? T.blueD : T.bg3, color: tourType === 'Virtual' ? T.blue : T.t1, cursor: 'pointer' }}>Online Tour</button>
           </div>
-
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Customer Name *" style={{ width: '100%', background: T.bg3, border: `1px solid ${T.line}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: T.t0 }} />
           <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone Number" style={{ width: '100%', background: T.bg3, border: `1px solid ${T.line}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, color: T.t0 }} />
           <div style={{ display: 'flex', gap: 8 }}>
@@ -158,8 +166,8 @@ const RoomRow = ({ room, state }: { room: Room; state: RoomState }) => {
 };
 
 const StatusBtn = ({ label, color, bg, border, active, onClick }: any) => (
-  <button onClick={onClick} style={{ 
-    background: bg, color, padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 800, 
+  <button onClick={onClick} style={{
+    background: bg, color, padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 800,
     border: `1px solid ${active ? color : border}`, cursor: 'pointer', transition: 'all 0.1s ease',
     opacity: active ? 1 : 0.6, transform: active ? 'scale(1.05)' : 'scale(1)',
     display: 'flex', alignItems: 'center', whiteSpace: 'nowrap'
@@ -184,19 +192,23 @@ function getBrochureUrl(name: string): string | null {
 
 // ─── MAIN PROPERTY CARD ───────────────────────────────
 const PropertyCard = ({
-  pg, idx, pgRooms, onScheduleVisit, viewMode = 'grid'
+  pg, idx, pgRooms, onScheduleVisit, viewMode = 'grid', isAdmin = false, onToggleStatus
 }: {
   pg: PGEntry;
   idx: number;
   pgRooms: (Room & { state: RoomState })[];
   onScheduleVisit: () => void;
   viewMode?: 'grid' | 'list';
+  isAdmin?: boolean;
+  onToggleStatus?: (id: number, newStatus: boolean) => void;
 }) => {
-  const [expanded, setExpanded]           = useState(false);
-  const [roomsExpanded, setRoomsExpanded]   = useState(false);
-  const [copiedWA, setCopiedWA]             = useState(false);
-  const [copiedMap, setCopiedMap]           = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [roomsExpanded, setRoomsExpanded] = useState(false);
+  const [copiedWA, setCopiedWA] = useState(false);
+  const [copiedMap, setCopiedMap] = useState(false);
+  const [togglingStatus, setTogglingStatus] = useState(false);
   const minPrice = getMinPrice(pg);
+  const isActive = pg.isActive !== false; // treat undefined (sheet data) as true
 
   const genderConfig = pg.gender?.toLowerCase().includes('girl') || pg.gender?.toLowerCase().includes('female')
     ? { color: '#EC4899', bg: 'rgba(236,72,153,0.08)', border: 'rgba(236,72,153,0.22)', label: 'Girls' }
@@ -206,19 +218,7 @@ const PropertyCard = ({
 
   const copyWA = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const t_was = pg.triplePrice ? Math.round((pg.triplePrice + 2000)/1000) : 15;
-    const t_now = pg.triplePrice ? Math.round(pg.triplePrice/1000) : 13;
-    const d_was = pg.doublePrice ? Math.round((pg.doublePrice + 2000)/1000) : 18;
-    const d_now = pg.doublePrice ? Math.round(pg.doublePrice/1000) : 16;
-    const s_was = pg.singlePrice ? Math.round((pg.singlePrice + 2000)/1000) : 27;
-    const s_now = pg.singlePrice ? Math.round(pg.singlePrice/1000) : 23;
-
-    const msg = `⚡️ Welcome to Gharpayy ${pg.name.toUpperCase()} - ${(pg.gender || 'COED').toUpperCase()}! ⚡️ ❤️ We're thrilled you loved our rooms.🚀 *Exclusive Offer Alert:* **2K OFF MONTHLY** \n\n` +
-      `🧡Triple Sharing. - ~Was ${t_was}K~, **now only ${t_now}k!*\n` +
-      `💛Dual Sharing. - ~Originally ${d_was}K~, **now just ${d_now}K!*\n` +
-      `❤️Private rooms - ~Formerly ${s_was}k~, **now specially priced at ${s_now}K!*\n\n` +
-      `💥 Act Fast: Lock in your reservation NOW and save 2000+ RS every month on a 12-month stay! *Offer expires in 4 hours. *Prebook* now for just 20k!*🔥   enjoy complimentary good food.`;
-
+    const msg = pg.waTemplate || `📍 ${pg.name.toUpperCase()}`;
     navigator.clipboard.writeText(msg);
     setCopiedWA(true);
     setTimeout(() => setCopiedWA(false), 2000);
@@ -227,92 +227,110 @@ const PropertyCard = ({
 
   const copyMap = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const link = pg.mapsLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((pg.name || '') + ' ' + (pg.locality || pg.area || '') + ' Bangalore')}`;
-    const pName = pg.name.toUpperCase();
-    const displayName = pName.startsWith('GHARPAYY') ? pName : `GHARPAYY ${pName}`;
-    const msg = `📍 ${displayName}\n` +
-      `🚀 Attention: Pre-Booking Required! _enjoy a seamless experience upon arrival!_\n\n` +
-      `🎯 DESTINATION ${link} |\n\n` +
-      `Secure your spot before you regret it! See you soon in Bangalore! ✨ 🚀`;
+    // Copy the raw location message from col N (locationMsg), fall back to a minimal string
+    const msg = pg.locationMsg || `📍 ${pg.name.toUpperCase()} — ${pg.locality || pg.area || 'Bangalore'}`;
     navigator.clipboard.writeText(msg);
     setCopiedMap(true);
     setTimeout(() => setCopiedMap(false), 2000);
     toast.success('Location Message copied! 📍');
   };
 
-
+  const handleToggleStatus = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!pg.id || togglingStatus) return;
+    setTogglingStatus(true);
+    console.log('Toggling:', pg.name, '| id:', pg.id, '| pid:', pg.pid); // ADD THIS
+    try {
+      const res = await fetch(`/api/properties/${pg.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !isActive }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to update status');
+        return;
+      }
+      onToggleStatus?.(pg.id, !isActive);
+      toast.success(`${pg.name} ${!isActive ? 'enabled' : 'disabled'} ✅`);
+    } catch {
+      toast.error('Network error — could not update status');
+    } finally {
+      setTogglingStatus(false);
+    }
+  };
 
   const isList = viewMode === 'list';
 
   return (
-    <div className={`gp-card ${isList ? 'inventory-list-card' : ''}`} style={{ 
-      background: T.bg2, 
-      border: `1px solid ${T.line}`, 
-      borderRadius: 12, 
-      overflow: 'hidden', 
+    <div className={`gp-card ${isList ? 'inventory-list-card' : ''}`} style={{
+      background: T.bg2,
+      border: `1px solid ${!isActive ? T.t3 : T.line}`,
+      borderRadius: 12,
+      overflow: 'hidden',
       width: '100%',
       height: 'fit-content',
       transition: 'all 0.2s',
       display: isList ? 'flex' : 'block',
       alignItems: isList ? 'stretch' : undefined,
+      opacity: !isActive ? 0.5 : 1,
+      filter: !isActive ? 'grayscale(0.4)' : 'none',
     }}>
-      
-      {/* Small Header */}
+
+      {/* Header */}
       <div style={{ padding: '14px 16px', flex: isList ? 1 : 'none', minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <h3 style={{ fontFamily: T.sans, fontWeight: 800, fontSize: 14, color: '#111827', margin: 0, letterSpacing: '-0.01em', minWidth: 0, wordBreak: 'break-word' }}>{pg.name.toUpperCase()}</h3>
-              <span style={{ fontFamily: T.mono, fontSize: 8, color: T.gold, fontWeight: 800, background: T.goldD, padding: '2px 4px', borderRadius: 4 }}>{pg.pid}</span>
+              <span style={{ fontFamily: T.mono, fontSize: 8, color: T.gold, fontWeight: 800, background: T.goldD, padding: '2px 4px', borderRadius: 4, flexShrink: 0 }}>{pg.pid}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, minWidth: 0 }}>
-              <MapPin size={10} style={{ color: T.t2 }} />
+              <MapPin size={10} style={{ color: T.t2, flexShrink: 0 }} />
               <span style={{ fontFamily: T.mono, fontSize: 9, color: T.t2, fontWeight: 600 }}>{pg.area}</span>
-              {pg.landmarks && <span style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, marginLeft: 6, minWidth: 0, wordBreak: 'break-word' }}>• {pg.landmarks}</span>}
+              {pg.landmarks && <span style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, marginLeft: 6, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>• {pg.landmarks}</span>}
             </div>
           </div>
-            {!isList && (
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ color: T.gold, fontWeight: 900, fontSize: 13, textTransform: 'uppercase' }}>{formatPrice(minPrice)}</div>
-                <div style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, fontWeight: 700, marginTop: 2 }}>
-                  {[
-                    pg.triplePrice && pg.triplePrice > 0 ? `T:₹${Math.round(pg.triplePrice/1000)}k` : null,
-                    pg.doublePrice && pg.doublePrice > 0 ? `D:₹${Math.round(pg.doublePrice/1000)}k` : null,
-                    pg.singlePrice && pg.singlePrice > 0 ? `S:₹${Math.round(pg.singlePrice/1000)}k` : null,
-                  ].filter(Boolean).join(' ')}
-                </div>
+          {!isList && (
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ color: T.gold, fontWeight: 900, fontSize: 13, textTransform: 'uppercase' }}>{formatPrice(minPrice)}</div>
+              <div style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, fontWeight: 700, marginTop: 2 }}>
+                {[
+                  pg.triplePrice && pg.triplePrice > 0 ? `T:₹${Math.round(pg.triplePrice / 1000)}k` : null,
+                  pg.doublePrice && pg.doublePrice > 0 ? `D:₹${Math.round(pg.doublePrice / 1000)}k` : null,
+                  pg.singlePrice && pg.singlePrice > 0 ? `S:₹${Math.round(pg.singlePrice / 1000)}k` : null,
+                ].filter(Boolean).join(' ')}
               </div>
-            )}
-          </div>
-  
-          {/* Essential Badges Only */}
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 10 }}>
-            <span style={{ background: genderConfig.bg, color: genderConfig.color, border: `1px solid ${genderConfig.border}`, borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>
-              {genderConfig.label.toUpperCase()}
-            </span>
-            {pg.propertyType && <span style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>{pg.propertyType.toUpperCase()}</span>}
-            
-            {/* Inventory Status Badges */}
-            {pgRooms.some(r => r.state.status === 'APPROVED') && <span style={{ background: '#DCFCE7', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>LIVE</span>}
-            {pgRooms.some(r => r.state.status === 'SOFT_LOCKED') && <span style={{ background: '#DBEAFE', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>BOOKED</span>}
-            {pg.managerContact && <span style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>MGR: {pg.managerContact}</span>}
+            </div>
+          )}
+        </div>
+
+        {/* Essential Badges */}
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 10 }}>
+          <span style={{ background: genderConfig.bg, color: genderConfig.color, border: `1px solid ${genderConfig.border}`, borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>
+            {genderConfig.label.toUpperCase()}
+          </span>
+          {pg.propertyType && <span style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>{pg.propertyType.toUpperCase()}</span>}
+          {pgRooms.some(r => r.state.status === 'APPROVED') && <span style={{ background: '#DCFCE7', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>LIVE</span>}
+          {pgRooms.some(r => r.state.status === 'SOFT_LOCKED') && <span style={{ background: '#DBEAFE', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>BOOKED</span>}
+          {pg.managerContact && <span style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB', borderRadius: 6, fontFamily: T.mono, fontSize: 8, fontWeight: 800, padding: '2px 8px' }}>MGR: {pg.managerContact}</span>}
+        </div>
+      </div>
+
+      {isList && (
+        <div className="list-price-panel" style={{ width: 150, display: 'flex', flexDirection: 'column', justifyContent: 'center', borderLeft: `1px solid ${T.line}`, padding: '0 12px', background: '#fff', flexShrink: 0 }}>
+          <div style={{ color: T.gold, fontWeight: 900, fontSize: 13 }}>{formatPrice(minPrice)}</div>
+          <div style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, fontWeight: 700, marginTop: 2 }}>
+            {[
+              pg.triplePrice && pg.triplePrice > 0 ? `T:₹${Math.round(pg.triplePrice / 1000)}k` : null,
+              pg.doublePrice && pg.doublePrice > 0 ? `D:₹${Math.round(pg.doublePrice / 1000)}k` : null,
+              pg.singlePrice && pg.singlePrice > 0 ? `S:₹${Math.round(pg.singlePrice / 1000)}k` : null,
+            ].filter(Boolean).join(' ')}
           </div>
         </div>
-  
-        {isList && (
-          <div className="list-price-panel" style={{ width: 150, display: 'flex', flexDirection: 'column', justifyContent: 'center', borderLeft: `1px solid ${T.line}`, padding: '0 12px', background: '#fff', flexShrink: 0 }}>
-            <div style={{ color: T.gold, fontWeight: 900, fontSize: 13 }}>{formatPrice(minPrice)}</div>
-            <div style={{ fontFamily: T.mono, fontSize: 8, color: T.t2, fontWeight: 700, marginTop: 2 }}>
-              {[
-                pg.triplePrice && pg.triplePrice > 0 ? `T:₹${Math.round(pg.triplePrice/1000)}k` : null,
-                pg.doublePrice && pg.doublePrice > 0 ? `D:₹${Math.round(pg.doublePrice/1000)}k` : null,
-                pg.singlePrice && pg.singlePrice > 0 ? `S:₹${Math.round(pg.singlePrice/1000)}k` : null,
-              ].filter(Boolean).join(' ')}
-            </div>
-          </div>
-        )}
+      )}
 
-      {/* ── ROOMS DRAWER (Collapsible) - Hide in List View initially to keep it clean */}
+      {/* Rooms Drawer */}
       {!isList && (
         <div style={{ borderTop: `1px solid ${T.line}` }}>
           <button onClick={() => setRoomsExpanded(!roomsExpanded)}
@@ -328,43 +346,71 @@ const PropertyCard = ({
         </div>
       )}
 
-      {/* compact Actions */}
-      <div style={{ 
-        padding: '12px 16px', 
-        display: 'flex', 
-        gap: 8, 
+      {/* Actions */}
+      <div style={{
+        padding: '12px 16px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
         borderTop: isList ? 'none' : `1px solid ${T.line}`,
         borderLeft: isList ? `1px solid ${T.line}` : 'none',
-        width: isList ? 300 : '100%',
+        width: isList ? 'auto' : '100%',
+        maxWidth: '100%',
         flexShrink: isList ? 0 : undefined,
         alignItems: 'center',
-        background: '#fff'
+        background: '#fff',
+        boxSizing: 'border-box',
       }}>
-        <button onClick={onScheduleVisit}
-          style={{ flex: isList ? 'none' : 2, background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: '#000', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
+        <button onClick={!isActive ? undefined : onScheduleVisit}
+          style={{ flex: isList ? 'none' : 2, background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px 14px', fontSize: 11, color: '#000', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 6, cursor: !isActive ? 'not-allowed' : 'pointer', boxShadow: '1px 1px 0 #000', opacity: !isActive ? 0.4 : 1 }}>
           <Calendar size={13} strokeWidth={3} /> TOUR
         </button>
-        
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => { const url = getBrochureUrl(pg.name); if(url) window.open(url, '_blank'); }} title="Download Brochure"
-            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: '#000', cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
+          <button onClick={!isActive ? undefined : () => { const url = getBrochureUrl(pg.name); if (url) window.open(url, '_blank'); }} title="Download Brochure"
+            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: '#000', cursor: !isActive ? 'not-allowed' : 'pointer', boxShadow: '1px 1px 0 #000', opacity: !isActive ? 0.4 : 1 }}>
             <FileText size={14} strokeWidth={3} />
           </button>
-          <button onClick={copyWA} title="Copy WhatsApp Offer"
-            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedWA ? '#16A34A' : '#000', cursor: 'pointer', boxShadow: '1px 1px 0 #000' }}>
+          <button onClick={!isActive ? undefined : copyWA} title="Copy WhatsApp Offer"
+            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedWA ? '#16A34A' : '#000', cursor: !isActive ? 'not-allowed' : 'pointer', boxShadow: '1px 1px 0 #000', opacity: !isActive ? 0.4 : 1 }}>
             {copiedWA ? <Check size={14} strokeWidth={3} /> : <DollarSign size={14} strokeWidth={3} />}
           </button>
-          
-          <button onClick={copyMap} title="Copy Map Location" disabled
-            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedMap ? '#16A34A' : '#000', cursor: 'not-allowed', opacity: 0.5, boxShadow: '1px 1px 0 #000' }}>
+          <button onClick={!isActive ? undefined : copyMap} title="Copy Map Location"
+            style={{ background: '#fff', border: `1.5px solid #000`, borderRadius: 8, padding: '10px', display: 'flex', alignItems: 'center', color: copiedMap ? '#16A34A' : '#000', cursor: !isActive ? 'not-allowed' : 'pointer', boxShadow: '1px 1px 0 #000', opacity: !isActive ? 0.4 : 1 }}>
             {copiedMap ? <Check size={14} strokeWidth={3} /> : <MapPin size={14} strokeWidth={3} />}
           </button>
         </div>
-
         <button onClick={() => setExpanded(!expanded)}
-          style={{ flex: isList ? 'none' : 1, width: isList ? 'auto' : 'auto', background: 'none', border: 'none', padding: '8px', fontSize: 11, color: T.t2, fontWeight: 600, cursor: 'pointer' }}>
+          style={{ flex: isList ? 'none' : 1, background: 'none', border: 'none', padding: '8px', fontSize: 11, color: T.t2, fontWeight: 600, cursor: 'pointer' }}>
           {expanded ? 'Hide' : 'Details'}
         </button>
+
+        {/* Enable / Disable — Admin only */}
+        {isAdmin && (
+          <button
+            onClick={handleToggleStatus}
+            disabled={togglingStatus}
+            title={isActive ? 'Disable this PG' : 'Enable this PG'}
+            style={{
+              background: isActive ? T.redD : T.greenD,
+              border: `1.5px solid ${isActive ? T.red : T.green}`,
+              borderRadius: 8,
+              padding: '8px 12px',
+              fontSize: 10,
+              fontWeight: 900,
+              color: isActive ? T.red : T.green,
+              cursor: togglingStatus ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              flexShrink: 0,
+              opacity: togglingStatus ? 0.6 : 1,
+              transition: 'all 0.15s',
+            }}
+          >
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: isActive ? T.red : T.green, display: 'inline-block' }} />
+            {togglingStatus ? '...' : isActive ? 'DISABLE' : 'ENABLE'}
+          </button>
+        )}
       </div>
 
       {/* Details Drawer */}
@@ -394,9 +440,9 @@ const PropertyCard = ({
             </div>
           )}
           {pg.safety && pg.safety.length > 0 && (
-             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {pg.safety.map(s => <span key={s} style={{ background: T.redD, border: `1.5px solid ${T.red}`, color: T.red, fontWeight: 800, padding: '3px 8px', borderRadius: 6, fontSize: 9 }}>🛡️ {s}</span>)}
-             </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {pg.safety.map(s => <span key={s} style={{ background: T.redD, border: `1.5px solid ${T.red}`, color: T.red, fontWeight: 800, padding: '3px 8px', borderRadius: 6, fontSize: 9 }}>🛡️ {s}</span>)}
+            </div>
           )}
         </div>
       )}
@@ -406,43 +452,101 @@ const PropertyCard = ({
 
 // ─── MAIN PAGE ────────────────────────────────────────
 export default function InventoryPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'manager';
+
   const [pgDataLive, setPgDataLive] = useState<PGEntry[]>(PG_DATA);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [search, setSearch]             = useState('');
+  const [search, setSearch] = useState('');
   const [areaFilter, setAreaFilter] = useState('All');
   const [cityZoneFilter, setCityZoneFilter] = useState('All');
   const [subAreaFilter, setSubAreaFilter] = useState('All');
-  const [genderFilter, setGenderFilter]   = useState('All');
-  const [statusFilter, setStatusFilter]   = useState<string>('All');
+  const [genderFilter, setGenderFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
   const [areaSidebarSearch, setAreaSidebarSearch] = useState('');
+  const [areaDrawerOpen, setAreaDrawerOpen] = useState(false);
 
   const { snapshot, getRoom, scheduleVisit, getPGStats, getGlobalStats } = useRoomStore();
   const [visitTarget, setVisitTarget] = useState<PGEntry | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const sync = async () => {
       setIsSyncing(true);
+      setPgDataLive([]);
       try {
-        const data = await fetchLivePGData();
-        if (data && data.length > 0) {
-          setPgDataLive(data);
-          toast.success(`Synced ${data.length} PGs from Sheet`);
+        const [iqData, masterRes] = await Promise.all([
+          fetchLivePGData(),
+          fetch('/api/sheets/master'),
+        ]);
+
+        // fetch status after sheets done — retry once if auth not ready
+        let statusRes = await fetch('/api/properties/status', {
+          credentials: 'include'
+        });
+        if (!statusRes.ok) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          statusRes = await fetch('/api/properties/status', {
+            credentials: 'include'
+          });
+        }
+
+        let masterData: PGEntry[] = [];
+        let inactiveNames: Set<string> = new Set();
+
+        if (masterRes.ok) {
+          const masterJson = await masterRes.json();
+          masterData = masterJson.active ?? [];
+          inactiveNames = new Set((masterJson.inactiveNames ?? []).map((n: string) => n.toLowerCase()));
+        } else {
+          const errText = await masterRes.text();
+          console.error('Master route failed:', masterRes.status, errText);
+          toast.error(`Master sheet error: ${masterRes.status}`);
+        }
+
+        const filteredIQ = iqData.map(p => ({
+          ...p,
+          isActive: inactiveNames.has(p.name.toLowerCase()) ? false : p.isActive,
+        }));
+        const iqNames = new Set(filteredIQ.map(p => p.name.toLowerCase()));
+        const uniqueMaster = masterData.filter(p => !iqNames.has(p.name.toLowerCase()));
+        const combined = [...filteredIQ, ...uniqueMaster];
+
+        if (statusRes.ok) {
+          const statusMap: Record<number, boolean> = await statusRes.json();
+          combined.forEach(p => {
+            if (p.id !== undefined && statusMap[p.id] !== undefined) {
+              p.isActive = statusMap[p.id];
+            }
+          });
+        }
+
+        if (combined.length > 0) {
+          setPgDataLive(combined);
+          toast.success(`Synced ${combined.length} PGs from Sheet ✅`);
+        } else {
+          setPgDataLive(PG_DATA);
+          toast.error('Sheet returned 0 PGs — showing cached data');
         }
       } catch (e) {
-        console.error("Sync failed", e);
+        console.error('Sync failed', e);
+        toast.error(`Sync failed: ${String(e)}`);
+        setPgDataLive(PG_DATA);
       }
       setIsSyncing(false);
     };
     sync();
-  }, [toast]);
-
+  }, []);
   const filtered = useMemo(() => {
     return pgDataLive.filter(p => {
+      // Non-admins never see disabled PGs
+      if (!isAdmin && p.isActive === false) return false;
+
       const q = search.toLowerCase();
-      const matchSearch = !q || (p.name||'').toLowerCase().includes(q) || (p.area||'').toLowerCase().includes(q);
+      const matchSearch = !q || (p.name || '').toLowerCase().includes(q) || (p.area || '').toLowerCase().includes(q);
       const normalize = (s: string) => (s || '').toLowerCase().replace(/[\s-]/g, '');
-      
+
       let matchCityZone = true;
       if (cityZoneFilter !== 'All') {
         const pz = getZoneByArea(p.locality || p.area || '').zone;
@@ -463,8 +567,10 @@ export default function InventoryPage() {
         matchSubArea = ps.includes(qs);
       }
 
-      const matchGender = genderFilter === 'All' || p.gender?.toLowerCase().includes(genderFilter.toLowerCase().slice(0, 3)) || (genderFilter === 'coed' && p.gender?.toLowerCase().includes('co'));
-      
+      const matchGender = genderFilter === 'All'
+        || p.gender?.toLowerCase().includes(genderFilter.toLowerCase().slice(0, 3))
+        || (genderFilter === 'coed' && p.gender?.toLowerCase().includes('co'));
+
       let matchStatus = true;
       if (statusFilter !== 'All') {
         const pgRooms = getRoomsForPG(p.id);
@@ -476,23 +582,18 @@ export default function InventoryPage() {
 
       return matchSearch && matchCityZone && matchArea && matchSubArea && matchGender && matchStatus;
     });
-  }, [search, cityZoneFilter, areaFilter, subAreaFilter, genderFilter, statusFilter, getRoom, pgDataLive]);
+  }, [search, cityZoneFilter, areaFilter, subAreaFilter, genderFilter, statusFilter, getRoom, pgDataLive, isAdmin]);
 
-  const stats = useMemo(() => {
-    return getGlobalStats(ROOM_MASTER);
-  }, [getGlobalStats, snapshot]);
+  const stats = useMemo(() => getGlobalStats(ROOM_MASTER), [getGlobalStats, snapshot]);
 
-  // All areas from pgDataLive — includes latest sheets data
-  const areasWithPGs = useMemo(() => {
-    return Array.from(new Set(pgDataLive.map(p => (p.area || '').trim()).filter(Boolean))).sort((a,b) => a.localeCompare(b));
-  }, [pgDataLive]);
+  const areasWithPGs = useMemo(() =>
+    Array.from(new Set(pgDataLive.map(p => (p.area || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [pgDataLive]
+  );
 
-  // Sidebar areas filtered by zone + search
   const sidebarAreas = useMemo(() => {
     let list = areasWithPGs;
-    if (cityZoneFilter !== 'All') {
-      list = list.filter(a => getZoneByArea(a).zone === cityZoneFilter);
-    }
+    if (cityZoneFilter !== 'All') list = list.filter(a => getZoneByArea(a).zone === cityZoneFilter);
     if (areaSidebarSearch.trim()) {
       const q = areaSidebarSearch.toLowerCase();
       list = list.filter(a => a.toLowerCase().includes(q));
@@ -507,59 +608,101 @@ export default function InventoryPage() {
     toast.success('Tour scheduled');
   };
 
+  const handleToggleStatus = useCallback((id: number, newStatus: boolean) => {
+    setPgDataLive(prev => prev.map(p => (p.id === id ? { ...p, isActive: newStatus } : p)));
+  }, []);
+
+  // ─── SHARED AREA LIST (used in both sidebar and mobile drawer) ────────────
+  const AreaList = ({ onSelect }: { onSelect?: () => void }) => (
+    <>
+      <div style={{ position: 'relative', marginBottom: 8 }}>
+        <Search size={10} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: T.t2 }} />
+        <input
+          value={areaSidebarSearch}
+          onChange={e => setAreaSidebarSearch(e.target.value)}
+          placeholder="Search area..."
+          style={{ width: '100%', background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 6, padding: '7px 8px 7px 26px', fontSize: 11, color: T.t0, boxSizing: 'border-box' }}
+        />
+      </div>
+      <button
+        onClick={() => { setAreaFilter('All'); onSelect?.(); }}
+        style={{ width: '100%', textAlign: 'left', padding: '7px 8px', borderRadius: 6, fontSize: 12, fontWeight: 800, cursor: 'pointer', marginBottom: 3, border: areaFilter === 'All' ? '1.5px solid #000' : '1px solid transparent', background: areaFilter === 'All' ? '#111827' : 'transparent', color: areaFilter === 'All' ? '#fff' : T.t1, transition: 'all 0.12s' }}>
+        All Areas
+      </button>
+      {sidebarAreas.map(area => {
+        const count = pgDataLive.filter(p => (p.area || '').toLowerCase() === area.toLowerCase()).length;
+        const isActive = areaFilter === area;
+        return (
+          <button key={area} onClick={() => { setAreaFilter(isActive ? 'All' : area); onSelect?.(); }}
+            style={{ width: '100%', textAlign: 'left', padding: '7px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', marginBottom: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: isActive ? '1.5px solid #000' : '1px solid transparent', background: isActive ? '#111827' : 'transparent', color: isActive ? '#fff' : T.t1, transition: 'all 0.12s' }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>{area}</span>
+            <span style={{ fontSize: 9, fontWeight: 900, background: isActive ? 'rgba(255,255,255,0.2)' : T.goldD, color: isActive ? '#fff' : T.gold, padding: '1px 5px', borderRadius: 10, flexShrink: 0 }}>{count}</span>
+          </button>
+        );
+      })}
+    </>
+  );
+
   return (
     <AppLayout title="Inventory OS" subtitle="Platform Truth">
       <div style={{ minHeight: '100vh', background: T.bg0, color: T.t0, fontFamily: T.sans, paddingBottom: 80 }}>
-        
-        {/* Sticky Filter Bar */}
+
+        {/* ── Sticky Filter Bar ── */}
         <div style={{ background: T.bg1, borderBottom: `1px solid ${T.line}`, position: 'sticky', top: 0, zIndex: 100, padding: '8px 12px' }}>
           <div style={{ maxWidth: 1440, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
 
-            {/* Row 1: Title + Status filters + View toggle + Search */}
+            {/* Row 1: Title + status btns + view toggle */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: 15, fontWeight: 800, margin: 0, whiteSpace: 'nowrap' }}>Inventory OS</h1>
               {isSyncing && (
                 <div style={{ fontSize: 9, color: T.gold, background: T.goldD, padding: '2px 6px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <div style={{ width: 8, height: 8, border: `2px solid ${T.gold}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                  <div style={{ width: 8, height: 8, border: `2px solid ${T.gold}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                   Syncing...
                 </div>
               )}
-              {/* Status filters */}
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
                 <StatusBtn label="ALL" color={T.t1} bg={T.bg3} border={T.line} active={statusFilter === 'All'} onClick={() => setStatusFilter('All')} />
                 <StatusBtn label={`${stats.live} LIVE`} color={T.green} bg={T.greenD} border={T.greenB} active={statusFilter === 'LIVE'} onClick={() => setStatusFilter('LIVE')} />
                 <StatusBtn label={`${stats.scheduled} SCHED`} color={T.blue} bg={T.blueD} border={T.blueB} active={statusFilter === 'SCHED'} onClick={() => setStatusFilter('SCHED')} />
                 <StatusBtn label={`${stats.occupied} OCC`} color="#EF4444" bg="rgba(239,68,68,0.1)" border="rgba(239,68,68,0.3)" active={statusFilter === 'OCCUPIED'} onClick={() => setStatusFilter('OCCUPIED')} />
               </div>
-              {/* View toggle */}
-              <div style={{ display: 'flex', background: T.bg2, borderRadius: 7, padding: 2, border: `1px solid ${T.line}`, flexShrink: 0 }}>
-                <button onClick={() => setViewMode('grid')} style={{ padding: '5px 8px', borderRadius: 5, background: viewMode === 'grid' ? T.bg4 : 'transparent', border: 'none', color: viewMode === 'grid' ? T.t0 : T.t2, cursor: 'pointer' }}>
-                  <LayoutGrid size={13} />
-                </button>
-                <button onClick={() => setViewMode('list')} style={{ padding: '5px 8px', borderRadius: 5, background: viewMode === 'list' ? T.bg4 : 'transparent', border: 'none', color: viewMode === 'list' ? T.t0 : T.t2, cursor: 'pointer' }}>
-                  <List size={13} />
-                </button>
+              {/* View toggle + mobile areas button */}
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {isMobile && (
+                  <button onClick={() => setAreaDrawerOpen(true)}
+                    style={{ background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 7, padding: '5px 10px', fontSize: 10, fontWeight: 800, color: T.t1, cursor: 'pointer' }}>
+                    📍 Areas
+                  </button>
+                )}
+                <div style={{ display: 'flex', background: T.bg2, borderRadius: 7, padding: 2, border: `1px solid ${T.line}` }}>
+                  <button onClick={() => setViewMode('grid')} style={{ padding: '5px 8px', borderRadius: 5, background: viewMode === 'grid' ? T.bg4 : 'transparent', border: 'none', color: viewMode === 'grid' ? T.t0 : T.t2, cursor: 'pointer' }}>
+                    <LayoutGrid size={13} />
+                  </button>
+                  <button onClick={() => setViewMode('list')} style={{ padding: '5px 8px', borderRadius: 5, background: viewMode === 'list' ? T.bg4 : 'transparent', border: 'none', color: viewMode === 'list' ? T.t0 : T.t2, cursor: 'pointer' }}>
+                    <List size={13} />
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Row 2: Zone Pills */}
+            {/* Row 2: Zone pills */}
             <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, paddingTop: 4, scrollbarWidth: 'none' }}>
               {[{ key: 'All', label: 'All Zones' }, ...Object.keys(ZONES).map(k => ({ key: k, label: k }))].map(z => (
                 <button key={z.key} onClick={() => { setCityZoneFilter(z.key); setAreaFilter('All'); setSubAreaFilter('All'); }}
                   style={{
                     padding: '4px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
-                    border: cityZoneFilter === z.key ? `1.5px solid #000` : `1px solid ${T.line}`,
+                    border: cityZoneFilter === z.key ? '1.5px solid #000' : `1px solid ${T.line}`,
                     background: cityZoneFilter === z.key ? '#111827' : T.bg2,
                     color: cityZoneFilter === z.key ? '#fff' : T.t1,
                     boxShadow: cityZoneFilter === z.key ? '1px 1px 0 #000' : 'none',
-                    transition: 'all 0.15s'
+                    transition: 'all 0.15s',
                   }}>{z.label}</button>
               ))}
             </div>
 
             {/* Row 3: Search + Gender */}
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%', paddingTop: 2 }}>
-              <div style={{ position: 'relative', flex: 1 }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
                 <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: T.t2 }} />
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search PG..."
                   style={{ width: '100%', background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 6, padding: '7px 8px 7px 24px', color: T.t0, fontSize: 11, boxSizing: 'border-box' }} />
@@ -575,7 +718,21 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        {/* Main layout: cards + area sidebar */}
+        {/* ── Mobile Area Drawer ── */}
+        {isMobile && areaDrawerOpen && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} onClick={() => setAreaDrawerOpen(false)} />
+            <div style={{ position: 'relative', background: T.bg1, borderRadius: '16px 16px 0 0', padding: '16px 14px 40px', maxHeight: '72vh', overflowY: 'auto', zIndex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, color: T.t2, letterSpacing: '0.08em', fontFamily: T.mono }}>AREAS WITH PGs</div>
+                <button onClick={() => setAreaDrawerOpen(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: T.t1, lineHeight: 1 }}>✕</button>
+              </div>
+              <AreaList onSelect={() => setAreaDrawerOpen(false)} />
+            </div>
+          </div>
+        )}
+
+        {/* ── Main layout ── */}
         <div style={{ maxWidth: 1440, margin: '0 auto', padding: '16px', display: 'flex', gap: 16, alignItems: 'flex-start' }}>
 
           {/* Property Cards */}
@@ -584,7 +741,10 @@ export default function InventoryPage() {
               className={viewMode === 'grid' ? 'inventory-grid' : ''}
               style={{
                 display: viewMode === 'grid' ? 'grid' : 'flex',
-                gridTemplateColumns: viewMode === 'grid' ? 'repeat(2, minmax(0, 1fr))' : undefined,
+                // single column on mobile, two on desktop
+                gridTemplateColumns: viewMode === 'grid'
+                  ? (isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))')
+                  : undefined,
                 flexDirection: viewMode === 'list' ? 'column' : undefined,
                 alignItems: 'stretch',
                 gap: 12,
@@ -596,6 +756,8 @@ export default function InventoryPage() {
                   <PropertyCard key={pg.id} pg={pg} idx={idx}
                     pgRooms={pgRooms}
                     viewMode={viewMode}
+                    isAdmin={isAdmin}
+                    onToggleStatus={handleToggleStatus}
                     onScheduleVisit={() => setVisitTarget(pg)} />
                 );
               })}
@@ -605,35 +767,17 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          {/* Area Sidebar */}
-          <div style={{ width: 200, flexShrink: 0, background: T.bg1, border: `1px solid ${T.line}`, borderRadius: 12, padding: '12px 10px', position: 'sticky', top: 180, maxHeight: 'calc(100vh - 210px)', overflowY: 'auto' }}>
-            <div style={{ fontSize: 9, fontWeight: 900, color: T.t2, letterSpacing: '0.08em', marginBottom: 8, fontFamily: T.mono }}>AREAS WITH PGs</div>
-            {/* Search */}
-            <div style={{ position: 'relative', marginBottom: 8 }}>
-              <Search size={10} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: T.t2 }} />
-              <input value={areaSidebarSearch} onChange={e => setAreaSidebarSearch(e.target.value)}
-                placeholder="Search area..."
-                style={{ width: '100%', background: T.bg2, border: `1px solid ${T.line}`, borderRadius: 6, padding: '6px 8px 6px 24px', fontSize: 10, color: T.t0, boxSizing: 'border-box' }} />
+          {/* Area Sidebar — desktop only */}
+          {!isMobile && (
+            <div style={{
+              width: 200, flexShrink: 0, background: T.bg1, border: `1px solid ${T.line}`,
+              borderRadius: 12, padding: '12px 10px', position: 'sticky', top: 180,
+              maxHeight: 'calc(100vh - 210px)', overflowY: 'auto', zIndex: 10,
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 900, color: T.t2, letterSpacing: '0.08em', marginBottom: 8, fontFamily: T.mono }}>AREAS WITH PGs</div>
+              <AreaList />
             </div>
-            {/* All option */}
-            <button onClick={() => setAreaFilter('All')}
-              style={{ width: '100%', textAlign: 'left', padding: '6px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800, cursor: 'pointer', marginBottom: 2, border: areaFilter === 'All' ? '1.5px solid #000' : `1px solid transparent`, background: areaFilter === 'All' ? '#111827' : 'transparent', color: areaFilter === 'All' ? '#fff' : T.t1, transition: 'all 0.12s' }}>
-              All Areas
-            </button>
-            {sidebarAreas.map(area => {
-              const count = pgDataLive.filter(p => (p.area || '').toLowerCase() === area.toLowerCase()).length;
-              const isActive = areaFilter === area;
-              return (
-                <button key={area} onClick={() => setAreaFilter(isActive ? 'All' : area)}
-                  style={{ width: '100%', textAlign: 'left', padding: '6px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', marginBottom: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: isActive ? '1.5px solid #000' : `1px solid transparent`, background: isActive ? '#111827' : 'transparent', color: isActive ? '#fff' : T.t1, transition: 'all 0.12s' }}
-                  onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = T.bg2; }}
-                  onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>{area}</span>
-                  <span style={{ fontSize: 9, fontWeight: 900, background: isActive ? 'rgba(255,255,255,0.2)' : T.goldD, color: isActive ? '#fff' : T.gold, padding: '1px 5px', borderRadius: 10, flexShrink: 0 }}>{count}</span>
-                </button>
-              );
-            })}
-          </div>
+          )}
         </div>
       </div>
 
