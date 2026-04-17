@@ -95,6 +95,7 @@ export async function GET(req: Request) {
     const status = url.searchParams.get('status');
     const source = url.searchParams.get('source');
     const zone = url.searchParams.get('zone');
+    const assignedMemberId = url.searchParams.get('assignedMemberId');
     const q = (url.searchParams.get('q') || '').trim();
     const duplicate = url.searchParams.get('duplicate');
     const sort = url.searchParams.get('sort');
@@ -199,6 +200,10 @@ export async function GET(req: Request) {
         { name: { $regex: safe, $options: 'i' } },
         { phone: { $regex: safe, $options: 'i' } },
       ];
+    }
+
+    if (assignedMemberId && assignedMemberId !== 'all') {
+      andFilters.push({ assignedMemberId });
     }
 
     if (andFilters.length > 0) {

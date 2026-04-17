@@ -1,10 +1,38 @@
 import { NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import Lead from '@/models/Lead';
-import PipelineStage from '@/models/PipelineStage';
+import Visit from '@/models/Visit';
 import { getAuthUserFromCookie } from '@/lib/auth';
 
-export async function GET() {
+const GOALS = {
+  leadsAdded: 40,
+  toursScheduled: 10,
+};
+
+function buildIstDayRange(dateInput?: string | null) {
+  const istOffsetMs = 5.5 * 60 * 60 * 1000;
+
+  let selectedDate = '';
+  if (dateInput && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    selectedDate = dateInput;
+  } else {
+    const now = new Date();
+    selectedDate = new Date(now.getTime() + istOffsetMs).toISOString().slice(0, 10);
+  }
+
+  const [year, month, day] = selectedDate.split('-').map((val) => parseInt(val, 10));
+  const utcMidnightForIstDay = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - istOffsetMs;
+  const dayStart = new Date(utcMidnightForIstDay);
+  const dayEnd = new Date(utcMidnightForIstDay + 24 * 60 * 60 * 1000 - 1);
+
+  return {
+    selectedDate,
+    dayStart,
+    dayEnd,
+  };
+}
+
+export async function GET(req: Request) {
   try {
     const authUser = await getAuthUserFromCookie();
     if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -12,69 +40,40 @@ export async function GET() {
 
     await connectToDatabase();
 
-    // Today's date range (IST midnight to midnight)
-    const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const istTime = new Date(now.getTime() + istOffset);
-    istTime.setUTCHours(0, 0, 0, 0);
-    const todayStart = new Date(istTime.getTime() - istOffset);
-    istTime.setUTCHours(23, 59, 59, 999);
-    const todayEnd = new Date(istTime.getTime() - istOffset);
-
-    // Get pipeline stages sorted by order to find the 4th stage
-    const stages = await PipelineStage.find({}).sort({ order: 1 }).lean();
-
-    // Fallback: if no DB stages, use static
-    const STATIC_STAGES = [
-      'new', 'contacted', 'requirement_collected', 'property_suggested',
-      'visit_scheduled', 'visit_completed', 'booked', 'lost',
-    ];
-
-    let visitStageKey = 'visit_scheduled'; // fallback (4th in static list)
-    let newLeadKey = 'new';
-
-    if (stages && stages.length >= 4) {
-      // 1st stage = new leads, 4th stage = visit confirmed
-      newLeadKey = (stages[0] as any).key;
-      visitStageKey = (stages[3] as any).key;
-    } else {
-      visitStageKey = STATIC_STAGES[4]; // visit_scheduled
-    }
+    const url = new URL(req.url);
+    const { selectedDate, dayStart, dayEnd } = buildIstDayRange(url.searchParams.get('date'));
 
     const memberId = authUser.id;
 
-    // Count: leads CREATED by this member today with status = 1st stage (new)
-    const newLeadsToday = await Lead.countDocuments({
+    const leadsAdded = await Lead.countDocuments({
       createdBy: memberId,
-      status: newLeadKey,
-      createdAt: { $gte: todayStart, $lte: todayEnd },
+      createdAt: { $gte: dayStart, $lte: dayEnd },
     });
 
-    // Also count all new leads created today (regardless of current status)
-    // because newly added leads start as "new"
-    const allNewLeadsToday = await Lead.countDocuments({
-      createdBy: memberId,
-      createdAt: { $gte: todayStart, $lte: todayEnd },
+    const toursScheduled = await Visit.countDocuments({
+      assignedStaffId: memberId,
+      createdAt: { $gte: dayStart, $lte: dayEnd },
     });
 
-    // Count: leads moved to the 4th stage (visit confirmed) by this member today
-    // We check leads assigned to this member whose status is visitStageKey AND
-    // their last status update happened today
-    const visitConfirmedToday = await Lead.countDocuments({
-      assignedMemberId: memberId,
-      status: visitStageKey,
-      updatedAt: { $gte: todayStart, $lte: todayEnd },
-    });
+    const leadsDone = leadsAdded >= GOALS.leadsAdded;
+    const toursDone = toursScheduled >= GOALS.toursScheduled;
 
     return NextResponse.json({
-      newLeadsToday: allNewLeadsToday,
-      visitConfirmedToday,
-      visitStageKey,
-      visitStageLabel: stages.length >= 4 ? (stages[3] as any).label : 'Visit Scheduled',
-      newLeadKey,
+      date: selectedDate,
+      leadsAdded,
+      toursScheduled,
+      leadsDone,
+      toursDone,
+      allDone: leadsDone && toursDone,
+      goals: GOALS,
+      thresholds: GOALS,
+      // Backward-compatible keys for legacy consumers.
+      newLeadsToday: leadsAdded,
+      visitConfirmedToday: toursScheduled,
+      visitStageLabel: 'Tours Scheduled',
       targets: {
-        newLeads: 40,
-        visitConfirmed: 10,
+        newLeads: GOALS.leadsAdded,
+        visitConfirmed: GOALS.toursScheduled,
       },
     });
   } catch (error: any) {

@@ -27,6 +27,7 @@ MONGODB_URI=mongodb://localhost:27017/dashboard
 JWT_SECRET=replace_with_a_strong_secret
 ```
 
+
 3. Start development server:
 ```bash
 npm run dev

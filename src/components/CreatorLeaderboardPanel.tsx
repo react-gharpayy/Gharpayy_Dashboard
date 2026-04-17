@@ -57,9 +57,9 @@ function PodiumCard({ item, index }: { item: CreatorLeaderboardEntry; index: num
       <p className="mt-1 text-sm font-semibold text-foreground">{item.name}</p>
       <p className="text-[11px] text-muted-foreground">{roleLabel[item.role]}</p>
       <div className={`mt-4 rounded-xl bg-background/70 px-3 py-2 ${heights[index] || 'h-20'}`}>
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pipeline Score</p>
-        <p className="mt-1 text-2xl font-bold text-foreground">{item.score}</p>
-        <p className="text-[9px] uppercase tracking-wide text-muted-foreground">{item.leadsCreated} leads</p>
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Tours</p>
+        <p className="mt-1 text-2xl font-bold text-foreground">{item.toursCount}</p>
+        <p className="text-[9px] uppercase tracking-wide text-muted-foreground">tour count</p>
         {item.zones.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {item.zones.map((z) => (
@@ -117,7 +117,7 @@ export function CreatorLeaderboardPanel({ compact = false }: { compact?: boolean
 
   const rankings = data?.rankings || [];
   const topThree = rankings.slice(0, 3);
-  const topCount = rankings[0]?.leadsCreated || 0;
+  const topCount = rankings[0]?.toursCount || 0;
 
   const currentUserEntry = useMemo(
     () => rankings.find((r) => r.userId === user?.id) || null,
@@ -131,7 +131,7 @@ export function CreatorLeaderboardPanel({ compact = false }: { compact?: boolean
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">Lead Legends</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">Tour Leaders</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -214,8 +214,8 @@ export function CreatorLeaderboardPanel({ compact = false }: { compact?: boolean
       {!isLoading && !isError && rankings.length === 0 && (
         <div className="rounded-2xl border bg-card p-8 text-center">
           <Trophy className="mx-auto h-7 w-7 text-muted-foreground" />
-          <p className="mt-2 text-sm font-semibold text-foreground">No lead creation activity in this period.</p>
-          <p className="text-xs text-muted-foreground">Start adding leads to climb the board.</p>
+          <p className="mt-2 text-sm font-semibold text-foreground">No tour activity in this period.</p>
+          <p className="text-xs text-muted-foreground">Schedule tours to climb the board.</p>
         </div>
       )}
 
@@ -236,13 +236,13 @@ export function CreatorLeaderboardPanel({ compact = false }: { compact?: boolean
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-foreground">Your Rank: #{currentUserEntry.rank}</p>
-                <Badge variant="secondary" className="text-[10px]">{currentUserEntry.leadsCreated} leads</Badge>
+                <Badge variant="secondary" className="text-[10px]">{currentUserEntry.toursCount} tours</Badge>
               </div>
               <div className="mt-3">
-                <Progress value={topCount > 0 ? Math.min(100, (currentUserEntry.leadsCreated / topCount) * 100) : 0} className="h-2" />
+                <Progress value={topCount > 0 ? Math.min(100, (currentUserEntry.toursCount / topCount) * 100) : 0} className="h-2" />
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   {topCount > 0
-                    ? `${Math.max(0, topCount - currentUserEntry.leadsCreated)} more to match #1`
+                    ? `${Math.max(0, topCount - currentUserEntry.toursCount)} more to match #1`
                     : 'You are setting the pace'}
                 </p>
                 {currentUserEntry.zones.length > 0 && (
@@ -295,8 +295,8 @@ export function CreatorLeaderboardPanel({ compact = false }: { compact?: boolean
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-foreground">{entry.score}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{entry.leadsCreated} leads</p>
+                      <p className="text-sm font-semibold text-foreground">{entry.toursCount}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">tours</p>
                     </div>
                   </motion.div>
                 );

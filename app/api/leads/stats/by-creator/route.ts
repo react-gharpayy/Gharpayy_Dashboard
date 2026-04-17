@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
-import Lead from '@/models/Lead';
-import PipelineStage from '@/models/PipelineStage';
+import Visit from '@/models/Visit';
 import { getAuthUserFromCookie } from '@/lib/auth';
 
 type LeaderboardPeriod = 'this_month' | 'all_time' | 'today' | 'last_30_days' | 'custom';
@@ -60,57 +59,50 @@ export async function GET(req: NextRequest) {
       to = bounds.to;
     }
 
-    const leadMatch: Record<string, any> = {
-      createdBy: { $ne: null },
+    const visitMatch: Record<string, any> = {
+      assignedStaffId: { $ne: null },
     };
 
-    if (zoneQuery && zoneQuery !== 'all') {
-      leadMatch.zone = zoneQuery;
-    }
-
     if (from && to && !isNaN(from.getTime()) && !isNaN(to.getTime())) {
-      leadMatch.createdAt = { $gte: from, $lte: to };
+      visitMatch.scheduledAt = { $gte: from, $lte: to };
     }
 
-    const pipelineStages = await PipelineStage.find().lean();
-    const branches = pipelineStages.map((stage: any) => ({
-      case: { $eq: ['$status', stage.key] },
-      then: (stage.order || 0) + 1,
-    }));
-
-    const rows = await Lead.aggregate([
-      { $match: leadMatch },
+    const rows = await Visit.aggregate([
+      { $match: visitMatch },
       {
-        $addFields: {
-          leadScoreVal: branches.length > 0 ? {
-            $switch: {
-              branches,
-              default: 1
-            }
-          } : 1
-        }
+        $lookup: {
+          from: 'leads',
+          localField: 'leadId',
+          foreignField: '_id',
+          as: 'lead',
+        },
       },
+      {
+        $unwind: {
+          path: '$lead',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      ...(zoneQuery && zoneQuery !== 'all' ? [{ $match: { 'lead.zone': zoneQuery } }] : []),
       {
         $group: {
           _id: {
-            createdBy: '$createdBy',
+            memberId: '$assignedStaffId',
             zone: {
-              $cond: [{ $gt: [{ $strLenCP: { $trim: { input: { $ifNull: ['$zone', ''] } } } }, 0] }, '$zone', null],
+              $cond: [{ $gt: [{ $strLenCP: { $trim: { input: { $ifNull: ['$lead.zone', ''] } } } }, 0] }, '$lead.zone', null],
             },
           },
-          count: { $sum: 1 },
-          score: { $sum: '$leadScoreVal' }
+          toursCount: { $sum: 1 },
         },
       },
       {
         $group: {
-          _id: '$_id.createdBy',
-          leadsCreated: { $sum: '$count' },
-          score: { $sum: '$score' },
+          _id: '$_id.memberId',
+          toursCount: { $sum: '$toursCount' },
           zones: {
             $push: {
               zone: '$_id.zone',
-              count: '$count',
+              count: '$toursCount',
             },
           },
         },
@@ -138,8 +130,7 @@ export async function GET(req: NextRequest) {
             $ifNull: ['$user.fullName', '$user.username'],
           },
           role: '$user.role',
-          score: 1,
-          leadsCreated: 1,
+          toursCount: 1,
           zones: {
             $filter: {
               input: '$zones',
@@ -149,7 +140,7 @@ export async function GET(req: NextRequest) {
           },
         },
       },
-      { $sort: { score: -1, leadsCreated: -1, name: 1, userId: 1 } },
+      { $sort: { toursCount: -1, name: 1, userId: 1 } },
     ]);
 
     const rankings = rows.map((row: any, idx: number) => ({
@@ -157,8 +148,7 @@ export async function GET(req: NextRequest) {
       userId: row.userId,
       name: row.name || 'Unknown User',
       role: row.role,
-      score: row.score || 0,
-      leadsCreated: row.leadsCreated,
+      toursCount: row.toursCount || 0,
       zones: (row.zones || []).sort((a: any, b: any) => {
         if (b.count !== a.count) return b.count - a.count;
         return String(a.zone).localeCompare(String(b.zone));

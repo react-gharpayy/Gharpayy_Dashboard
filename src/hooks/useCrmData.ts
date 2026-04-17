@@ -27,6 +27,15 @@ export type LeadWithRelations = {
   isDuplicate?: boolean;
   duplicateCount?: number;
   notes?: string;
+  activity?: LeadActivityEntry[];
+  lastOn?: string;
+  stageOn?: string;
+  nextOn?: string;
+  visitOn?: string;
+  visitDoneOn?: string;
+  bookingOn?: string;
+  touches?: number;
+  nextAction?: string;
   assignedMemberId?: string;
   assignmentStatus?: 'pending' | 'accepted';
   assignmentRequestedById?: string;
@@ -34,6 +43,31 @@ export type LeadWithRelations = {
   assignmentAcceptedAt?: string;
   createdAt: string;
   lastActivityAt: string;
+};
+
+export type LeadActivityEntry = {
+  id: string;
+  on: string;
+  by: string;
+  type: string;
+  note: string;
+};
+
+export type LogLeadActivityPayload = {
+  type: string;
+  note: string;
+  nextAction?: string;
+  nextDate?: string;
+  visitDate?: string;
+  newStage?: string;
+  lostReason?: string;
+};
+
+export type ActivityFeedRow = LeadActivityEntry & {
+  leadId: string;
+  leadName: string;
+  leadPhone?: string;
+  leadStage?: string;
 };
 
 export type LeaderboardPeriod = 'this_month' | 'all_time' | 'today' | 'last_30_days' | 'custom';
@@ -45,8 +79,7 @@ export type CreatorLeaderboardEntry = {
   userId: string;
   name: string;
   role: 'manager' | 'admin' | 'member';
-  score: number;
-  leadsCreated: number;
+  toursCount: number;
   zones: { zone: string; count: number }[];
 };
 
@@ -56,6 +89,30 @@ export type CreatorLeaderboardResponse = {
   to: string | null;
   generatedAt: string;
   rankings: CreatorLeaderboardEntry[];
+};
+
+export type LeadsDailyProgressMember = {
+  id: string;
+  name: string;
+  zones: string[];
+  leadsAdded: number;
+  toursScheduled: number;
+  leadsDone: boolean;
+  toursDone: boolean;
+  allDone: boolean;
+};
+
+export type LeadsDailyProgressResponse = {
+  date: string;
+  members: LeadsDailyProgressMember[];
+  goals: {
+    leadsAdded: number;
+    toursScheduled: number;
+  };
+  thresholds?: {
+    leadsAdded: number;
+    toursScheduled: number;
+  };
 };
 
 export type ZoneAnalyticsMetrics = {
@@ -133,6 +190,7 @@ export type LeadsQueryFilters = {
   status?: string;
   source?: string;
   zone?: string;
+  assignedMemberId?: string;
   duplicate?: 'all' | 'duplicate' | 'unique';
   sort?: 'newest' | 'oldest' | 'alphabetical';
   period?: 'all' | 'today' | 'custom';
@@ -169,6 +227,9 @@ export const useLeadsPaginated = (page = 0, pageSize = 50, filters?: LeadsQueryF
       if (filters?.status && filters.status !== 'all') params.set('status', filters.status);
       if (filters?.source && filters.source !== 'all') params.set('source', filters.source);
       if (filters?.zone && filters.zone !== 'all') params.set('zone', filters.zone);
+      if (filters?.assignedMemberId && filters.assignedMemberId !== 'all') {
+        params.set('assignedMemberId', filters.assignedMemberId);
+      }
       if (filters?.duplicate && filters.duplicate !== 'all') params.set('duplicate', filters.duplicate);
       if (filters?.sort) params.set('sort', filters.sort);
       if (filters?.period && filters.period !== 'all') params.set('period', filters.period);
@@ -338,6 +399,84 @@ export const useUpdateLead = () => {
   });
 };
 
+export const useLeadActivity = (leadId?: string) =>
+  useQuery({
+    queryKey: ['lead-activity', leadId],
+    enabled: !!leadId,
+    queryFn: async () => {
+      const res = await fetch(`/api/leads/${leadId}/activity`);
+      if (!res.ok) throw new Error('Failed to fetch lead activity');
+      return res.json() as Promise<LeadActivityEntry[]>;
+    },
+  });
+
+export const useLogLeadActivity = () => {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ leadId, payload }: { leadId: string; payload: LogLeadActivityPayload }) => {
+      const res = await fetch(`/api/leads/${leadId}/activity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        let message = 'Failed to log activity';
+        try {
+          const data = await res.json();
+          if (data?.error) message = data.error;
+        } catch {
+          // Ignore JSON parse errors and use fallback message.
+        }
+        throw new Error(message);
+      }
+
+      return res.json() as Promise<LeadWithRelations>;
+    },
+    onSuccess: async (_, vars) => {
+      broadcastLeadsUpdated();
+      await qc.invalidateQueries({ queryKey: ['lead-activity', vars.leadId] });
+      await qc.invalidateQueries({ queryKey: ['activity-log', vars.leadId] });
+      await qc.invalidateQueries({ queryKey: ['leads'] });
+      await qc.invalidateQueries({ queryKey: ['leads-paginated'] });
+      await qc.invalidateQueries({ queryKey: ['leads-infinite'] });
+      await qc.refetchQueries({ queryKey: ['leads-paginated'], type: 'active' });
+    },
+  });
+};
+
+export const useAllActivityFeed = (params?: {
+  page?: number;
+  limit?: number;
+  userId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  type?: string;
+}) =>
+  useQuery({
+    queryKey: ['activity-all', params || {}],
+    queryFn: async () => {
+      const query = new URLSearchParams();
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.limit) query.set('limit', String(params.limit));
+      if (params?.userId) query.set('userId', params.userId);
+      if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+      if (params?.dateTo) query.set('dateTo', params.dateTo);
+      if (params?.type) query.set('type', params.type);
+
+      const res = await fetch(`/api/activity/all?${query.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch activity feed');
+      return res.json() as Promise<{
+        rows: ActivityFeedRow[];
+        total: number;
+        page: number;
+        limit: number;
+        hasMore: boolean;
+      }>;
+    },
+  });
+
 export const useAgents = () =>
   useQuery({
     queryKey: ['members'],
@@ -499,6 +638,19 @@ export const useCreatorLeaderboard = (
       if (!res.ok) throw new Error('Failed to fetch leaderboard');
       return res.json() as Promise<CreatorLeaderboardResponse>;
     },
+  });
+
+export const useLeadsDailyProgress = (date: string) =>
+  useQuery({
+    queryKey: ['leads-daily-progress', date],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (date) params.set('date', date);
+      const res = await fetch(`/api/leads/daily-progress?${params.toString()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to fetch daily progress');
+      return res.json() as Promise<LeadsDailyProgressResponse>;
+    },
+    staleTime: 30000,
   });
 
 export const useOfficeZones = () =>

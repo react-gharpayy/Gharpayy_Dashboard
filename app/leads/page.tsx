@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import AppLayout from '@/components/AppLayout';
 import EditLeadDialog from '@/components/EditLeadDialog';
@@ -26,10 +26,21 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { T, QUALITY, GEO_TECH_PARKS, FDISPLAY } from '@/lib/leadGeoData';
+import { T, QUALITY, GEO_TECH_PARKS } from '@/lib/leadGeoData';
 import { parseMoveInV2, parseBudgetV2 } from '@/lib/leadParserV2';
 import { LEADS_UPDATED_AT_KEY, getLeadsUpdatedStamp } from '@/lib/leadSync';
 import { ZonePill, BudgetChips, GeoIntelPanel } from '@/components/LeadUIAtoms';
+import LogActivitySheet from '@/components/LogActivitySheet';
+import LeadsProgressPanelButton from '@/components/LeadsProgressPanelButton';
+import MemberDailyReminderPopup from '@/components/MemberDailyReminderPopup';
+import {
+  actColor,
+  actIcon,
+  formatActivityDate,
+  getAutoTags,
+  getBand,
+  getMandatoryQueue,
+} from '@/lib/leadsActivityAndPriority';
 
 // ─── helpers to map DB lead → card display ────────────────────────
 function mapLeadMeta(lead: LeadWithRelations) {
@@ -85,6 +96,16 @@ const statusBadgeConfig: Record<string, { bg: string; color: string; border: str
   lost: { bg: 'rgba(100,116,139,0.08)', color: '#64748b', border: 'rgba(100,116,139,0.25)' },
 };
 
+const BAND_CONFIG: Record<string, { label: string; subtitle: string; color: string }> = {
+  mandatory: { label: 'MANDATORY - ACTION NOW', subtitle: 'Immediate actions required right now.', color: '#7f1d1d' },
+  fire: { label: 'FIRE - MOVE-IN <= 7 DAYS', subtitle: 'Close or lose this week.', color: '#991b1b' },
+  stuck: { label: 'STUCK - STAGE EXPIRED', subtitle: 'Days exceeded. Unblock today.', color: '#92400e' },
+  active: { label: 'IN PROGRESS', subtitle: 'Moving. Sorted by move-in date.', color: '#065f46' },
+  future: { label: 'FUTURE - MOVE-IN 45+ DAYS', subtitle: 'Qualified. Set a trigger.', color: '#1e3a8a' },
+  dormant: { label: 'DORMANT - 30+ DAYS SILENT', subtitle: 'Final attempt then mark lost.', color: '#1f2937' },
+  closed: { label: 'BOOKED / ONBOARDING', subtitle: 'Handed off to next team.', color: '#064e3b' },
+};
+
 // ─── Compute a simple progress from lead fields ────────────────────────
 function computeLeadProgress(lead: LeadWithRelations) {
   const fields = [lead.name, lead.phone, lead.email, lead.preferredLocation, lead.budget, lead.moveInDate, lead.profession, lead.roomType, lead.needPreference, lead.specialRequests];
@@ -115,6 +136,7 @@ const Leads = () => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterDuplicate, setFilterDuplicate] = useState<string>('all');
   const [filterZone, setFilterZone] = useState<string>('all');
+  const [filterMember, setFilterMember] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showFiltersMobile, setShowFiltersMobile] = useState(false);
@@ -154,6 +176,17 @@ const Leads = () => {
     remarks: string;
   }>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [activityLeadId, setActivityLeadId] = useState<string | null>(null);
+  const [expandedActivityIds, setExpandedActivityIds] = useState<Set<string>>(new Set());
+  const [bandOpen, setBandOpen] = useState<Record<string, boolean>>({
+    mandatory: true,
+    fire: true,
+    stuck: true,
+    active: true,
+    future: true,
+    dormant: true,
+    closed: true,
+  });
   const queryClient = useQueryClient();
 
   const hasValidCustomRange = (() => {
@@ -253,6 +286,7 @@ const Leads = () => {
     status: filterStatus,
     source: filterSource,
     zone: filterZone,
+    assignedMemberId: filterMember,
     duplicate: filterDuplicate as LeadsQueryFilters['duplicate'],
     sort: filterDateMode === 'oldest' ? 'oldest' : filterDateMode === 'alphabetical' ? 'alphabetical' : 'newest',
     period: periodForDateFilter,
@@ -262,7 +296,7 @@ const Leads = () => {
 
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearchQuery, filterSource, filterStatus, filterDuplicate, filterZone, filterDateMode, filterDate, filterMonth, fromDate, toDate, hasValidCustomRange]);
+  }, [debouncedSearchQuery, filterSource, filterStatus, filterDuplicate, filterZone, filterMember, filterDateMode, filterDate, filterMonth, fromDate, toDate, hasValidCustomRange]);
   
   const PAGE_SIZE = 50;
   const { data: paginatedData, isLoading } = useLeadsPaginated(page, PAGE_SIZE, serverFilters);
@@ -284,6 +318,7 @@ const Leads = () => {
   const { user } = useAuth();
   const canManageLeadAssignments = ['super_admin', 'manager', 'admin', 'member'].includes(user?.role || '');
   const canAddLead = ['super_admin', 'manager', 'admin', 'member'].includes(user?.role || '');
+  const canUseMemberFilter = ['super_admin', 'manager', 'admin'].includes(user?.role || '');
   const isScopedZoneRole = ['admin', 'member'].includes(user?.role || '');
   const isMemberRole = user?.role === 'member';
   const isAdminRole = user?.role === 'admin';
@@ -294,6 +329,12 @@ const Leads = () => {
       setFilterZone('all');
     }
   }, [user?.role, filterZone]);
+
+  useEffect(() => {
+    if (!canUseMemberFilter && filterMember !== 'all') {
+      setFilterMember('all');
+    }
+  }, [canUseMemberFilter, filterMember]);
 
   useEffect(() => {
     if (!isAssignedByMeReadOnly) return;
@@ -346,6 +387,79 @@ const Leads = () => {
       
       return true;
     });
+
+  const mandatoryQueue = useMemo(
+    () => getMandatoryQueue(filtered, String(user?.id || '')),
+    [filtered, user?.id]
+  );
+
+  const mandatoryLeadIds = useMemo(
+    () => new Set(mandatoryQueue.map((item) => item.leadId)),
+    [mandatoryQueue]
+  );
+
+  const groupedBands = useMemo(() => {
+    const groups: Record<string, LeadWithRelations[]> = {
+      mandatory: [],
+      fire: [],
+      stuck: [],
+      active: [],
+      future: [],
+      dormant: [],
+      closed: [],
+    };
+
+    groups.mandatory = mandatoryQueue
+      .map((item) => filtered.find((lead) => lead.id === item.leadId))
+      .filter((lead): lead is LeadWithRelations => Boolean(lead));
+
+    filtered.forEach((lead) => {
+      // Keep sections mutually exclusive so one lead is shown in only one section at a time.
+      if (mandatoryLeadIds.has(lead.id)) return;
+      const band = getBand(lead) || 'active';
+      if (!groups[band]) groups[band] = [];
+      groups[band].push(lead);
+    });
+
+    const sortByMoveIn = (a: LeadWithRelations, b: LeadWithRelations) => {
+      const da = a.moveInDate ? new Date(a.moveInDate).getTime() : Number.POSITIVE_INFINITY;
+      const db = b.moveInDate ? new Date(b.moveInDate).getTime() : Number.POSITIVE_INFINITY;
+      return da - db;
+    };
+
+    Object.keys(groups).forEach((band) => {
+      if (band === 'mandatory') return;
+      groups[band].sort(sortByMoveIn);
+    });
+    return groups;
+  }, [filtered, mandatoryLeadIds, mandatoryQueue]);
+
+  const orderedBandKeys = ['mandatory', 'fire', 'stuck', 'active', 'future', 'dormant', 'closed'];
+
+  const displayRows = useMemo(() => {
+    const rows: Array<{ kind: 'header'; band: string } | { kind: 'lead'; band: string; lead: LeadWithRelations }> = [];
+
+    orderedBandKeys.forEach((band) => {
+      const leadsForBand = groupedBands[band] || [];
+      if (leadsForBand.length === 0) return;
+      rows.push({ kind: 'header', band });
+      if (bandOpen[band] !== false) {
+        leadsForBand.forEach((lead) => rows.push({ kind: 'lead', band, lead }));
+      }
+    });
+
+    return rows;
+  }, [groupedBands, bandOpen]);
+
+  const statsBar = useMemo(() => {
+    const queue = mandatoryQueue.length;
+    const stuck = (groupedBands.stuck || []).length;
+    const silent = filtered.filter((lead) => (lead.touches || 0) === 0).length;
+    const extra = filtered.filter((lead) => String(lead.assignedMemberId || '') !== String(user?.id || '')).length;
+    const dups = filtered.filter((lead) => !!lead.isDuplicate).length;
+
+    return { queue, stuck, silent, extra, dups };
+  }, [filtered, groupedBands.stuck, mandatoryQueue.length, user?.id]);
 
   const toggleSelect = (id: string) => {
     const next = new Set(selectedIds);
@@ -702,15 +816,7 @@ const Leads = () => {
       subtitle={subtitleCount}
       showQuickAddLead={false}
       actions={(
-        <Button
-          size="sm"
-          className="gap-1.5 text-xs"
-          disabled={!canAddLead}
-          title={!canAddLead ? 'Only Super Admins, managers, admins, and members can add leads' : 'Open Lead Intake in a new tab'}
-          onClick={openLeadIntakeInNewTab}
-        >
-          <Plus size={13} /> Add Lead
-        </Button>
+        <LeadsProgressPanelButton />
       )}
     >
       {/* Filters Area */}
@@ -718,7 +824,7 @@ const Leads = () => {
         <div className="flex items-center justify-between">
           <Button variant="outline" size="sm" onClick={() => setShowFiltersMobile(!showFiltersMobile)} className="ml-1.5 md:ml-0 gap-1.5 h-7 text-[11px] rounded-xl md:hidden">
             <Filter size={14} /> Filters
-            {(!showFiltersMobile && (filterSource !== 'all' || filterStatus !== 'all' || filterDuplicate !== 'all' || filterZone !== 'all' || filterDateMode !== 'newest' || fromDate || toDate)) && <div className="w-1.5 h-1.5 rounded-full bg-accent" />}
+            {(!showFiltersMobile && (filterSource !== 'all' || filterStatus !== 'all' || filterDuplicate !== 'all' || filterZone !== 'all' || (canUseMemberFilter && filterMember !== 'all') || filterDateMode !== 'newest' || fromDate || toDate)) && <div className="w-1.5 h-1.5 rounded-full bg-accent" />}
           </Button>
 
           {/* Desktop Filters */}
@@ -758,6 +864,7 @@ const Leads = () => {
                 <SelectItem value="duplicate">Duplicates Only</SelectItem>
               </SelectContent>
             </Select>
+            {!isMemberRole && (
             <Select value={filterZone} onValueChange={setFilterZone}>
               <SelectTrigger className="shrink-0 h-7 text-[10px] rounded-xl w-auto min-w-[88px] bg-card border-border px-2">
                 <SelectValue />
@@ -765,11 +872,9 @@ const Leads = () => {
               <SelectContent side="bottom" align="start">
                 {isScopedZoneRole ? (
                   <>
-                    {(isMemberRole || isAdminRole) && <SelectItem value="all">All Leads</SelectItem>}
+                    {isAdminRole && <SelectItem value="all">All Leads</SelectItem>}
                     <SelectItem value="my_zones">My Zones</SelectItem>
                     <SelectItem value="other_zones">Other Zones</SelectItem>
-                    {isMemberRole && <SelectItem value="assigned_by_me">Assigned by Me</SelectItem>}
-                    {isMemberRole && <SelectItem value="assigned_to_me">Assigned to Me</SelectItem>}
                   </>
                 ) : (
                   <>
@@ -779,6 +884,21 @@ const Leads = () => {
                 )}
               </SelectContent>
             </Select>
+            )}
+
+            {canUseMemberFilter && (
+              <Select value={filterMember} onValueChange={setFilterMember}>
+                <SelectTrigger className="shrink-0 h-7 text-[10px] rounded-xl w-auto min-w-[110px] bg-card border-border px-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent side="bottom" align="start">
+                  <SelectItem value="all">All Members</SelectItem>
+                  {(members || []).map((member: any) => (
+                    <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); setFromDate(''); setToDate(''); }}>
               <SelectTrigger className="shrink-0 h-7 text-[10px] rounded-xl w-auto min-w-[96px] bg-card border-border px-2">
@@ -891,16 +1011,15 @@ const Leads = () => {
                 <SelectItem value="duplicate">Duplicates Only</SelectItem>
               </SelectContent>
             </Select>
+            {!isMemberRole && (
             <Select value={filterZone} onValueChange={setFilterZone}>
               <SelectTrigger className="w-full h-8 text-[10px] rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
                 {isScopedZoneRole ? (
                   <>
-                    {(isMemberRole || isAdminRole) && <SelectItem value="all">All Leads</SelectItem>}
+                    {isAdminRole && <SelectItem value="all">All Leads</SelectItem>}
                     <SelectItem value="my_zones">My Zones</SelectItem>
                     <SelectItem value="other_zones">Other Zones</SelectItem>
-                    {isMemberRole && <SelectItem value="assigned_by_me">Assigned by Me</SelectItem>}
-                    {isMemberRole && <SelectItem value="assigned_to_me">Assigned to Me</SelectItem>}
                   </>
                 ) : (
                   <>
@@ -910,6 +1029,18 @@ const Leads = () => {
                 )}
               </SelectContent>
             </Select>
+            )}
+            {canUseMemberFilter && (
+              <Select value={filterMember} onValueChange={setFilterMember}>
+                <SelectTrigger className="w-full h-8 text-[10px] rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
+                <SelectContent side="bottom" align="start">
+                  <SelectItem value="all">All Members</SelectItem>
+                  {(members || []).map((member: any) => (
+                    <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={filterDateMode} onValueChange={(v) => { setFilterDateMode(v as any); setFilterDate(''); setFilterMonth(''); setFromDate(''); setToDate(''); }}>
               <SelectTrigger className="w-full h-8 text-[10px] rounded-lg bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent side="bottom" align="start">
@@ -969,6 +1100,76 @@ const Leads = () => {
         )}
       </div>
 
+      {/* ── Member Zone Tabs ── */}
+      {isMemberRole && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          marginBottom: '14px',
+          padding: '3px',
+          background: 'rgba(0,0,0,0.04)',
+          borderRadius: '12px',
+          border: '1px solid rgba(0,0,0,0.06)',
+          overflowX: 'auto',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        }}>
+          {[
+            { key: 'all', label: 'All Leads' },
+            { key: 'my_zones', label: 'My Zones' },
+            { key: 'other_zones', label: 'Extra Zones' },
+            { key: 'assigned_by_me', label: 'Assigned by Me' },
+            { key: 'assigned_to_me', label: 'Assigned to Me' },
+          ].map((tab) => {
+            const isActive = filterZone === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setFilterZone(tab.key)}
+                style={{
+                  position: 'relative',
+                  flex: '1 1 0%',
+                  minWidth: 'max-content',
+                  padding: '7px 14px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontWeight: isActive ? 600 : 500,
+                  letterSpacing: '0.01em',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
+                  background: isActive
+                    ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
+                    : 'transparent',
+                  color: isActive ? '#ffffff' : '#64748b',
+                  boxShadow: isActive
+                    ? '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)'
+                    : 'none',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,0,0,0.04)';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#334155';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#64748b';
+                  }
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <MemberDailyReminderPopup />
+
       {/* Bulk actions */}
       {selectedIds.size > 0 && canManageLeadAssignments && !isAssignedByMeReadOnly && (
         <motion.div
@@ -997,6 +1198,7 @@ const Leads = () => {
       {/* ═══════════════════════════════════════════════════════════ */}
       {/*  LEAD CARDS — NEW UI                                       */}
       {/* ═══════════════════════════════════════════════════════════ */}
+
       <style>{`
         :root {
           --lc-bg0: #ffffff; --lc-bg1: #f8f9fc; --lc-bg2: #f1f3f8; --lc-bg3: #e8ebf2;
@@ -1034,10 +1236,33 @@ const Leads = () => {
       `}</style>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {filtered.map(lead => {
+        {displayRows.map((row, rowIndex) => {
+          if (row.kind === 'header') {
+            const cfg = BAND_CONFIG[row.band];
+            const count = groupedBands[row.band]?.length || 0;
+            return (
+              <button
+                key={`band-${row.band}`}
+                type="button"
+                onClick={() => setBandOpen((prev) => ({ ...prev, [row.band]: !prev[row.band] }))}
+                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left"
+                style={{ background: cfg.color, color: '#fff' }}
+              >
+                <div>
+                  <div className="text-xs font-bold tracking-wide">{cfg.label}</div>
+                  <div className="text-[11px] text-white/80">{cfg.subtitle}</div>
+                </div>
+                <div className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold">{count}</div>
+              </button>
+            );
+          }
+
+          const lead = row.lead;
           const m = mapLeadMeta(lead);
           const isExpanded = expandedId === lead.id;
           const isDuplicateLead = !!lead.isDuplicate;
+          const autoTags = getAutoTags(lead);
+          const hasUrgentTags = autoTags.some((tag) => tag.urgent);
           const sBadge = statusBadgeConfig[lead.status] || statusBadgeConfig.new;
           const stageLabel = pipelineStages.find((s: any) => s.key === lead.status)?.label || lead.status;
           const hue = lead.name ? lead.name.charCodeAt(0) * 7 % 360 : 200;
@@ -1062,15 +1287,19 @@ const Leads = () => {
             // ─── COLLAPSED CARD ───
             return (
               <div
-                key={lead.id}
+                key={`${row.band}-${lead.id}-${rowIndex}`}
                 className="lc-card"
                 onClick={() => {
-                  if (isAssignedByMeReadOnly) return;
                   setExpandedId(lead.id);
                 }}
                 style={{
                   background: isDuplicateLead ? 'rgba(251,113,133,0.045)' : 'var(--lc-bg1)',
-                  border: isDuplicateLead ? '1px solid rgba(251,113,133,0.28)' : '1px solid var(--lc-line)',
+                  border: hasUrgentTags
+                    ? '1px solid #7f1d1d'
+                    : isDuplicateLead
+                      ? '1px solid rgba(251,113,133,0.28)'
+                      : '1px solid var(--lc-line)',
+                  borderLeft: hasUrgentTags ? '3px solid #dc2626' : `3px solid ${sBadge.color}`,
                   borderRadius: 12,
                   padding: '12px 14px',
                   cursor: 'pointer',
@@ -1202,6 +1431,27 @@ const Leads = () => {
                         </>
                       )}
                     </div>
+
+                    {autoTags.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                        {autoTags.map((tag, idx) => (
+                          <span
+                            key={`${tag.label}-${idx}`}
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 700,
+                              padding: '1px 7px',
+                              borderRadius: 999,
+                              color: tag.urgent ? '#7f1d1d' : '#111827',
+                              background: `${tag.color}33`,
+                              border: `1px solid ${tag.color}`,
+                            }}
+                          >
+                            {tag.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Quick actions on collapsed */}
@@ -1230,7 +1480,6 @@ const Leads = () => {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (isAssignedByMeReadOnly) return;
                           setExpandedId(lead.id);
                         }} 
                         style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
@@ -1276,6 +1525,14 @@ const Leads = () => {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
+
+                    <div style={{ width: '100%', fontSize: 8.5, lineHeight: 1.2, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', textAlign: 'right' }}>
+                      Added by: {lead.creator?.name || '-'}
+                    </div>
+
+                    <div style={{ width: '100%', fontSize: 8.5, lineHeight: 1.2, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', textAlign: 'right' }}>
+                      Assigned to: {lead.members?.name || '-'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1301,16 +1558,22 @@ const Leads = () => {
             acc: 'var(--lc-acc)',
             accentBg: 'var(--lc-accent-bg)',
           };
+          const isLoggingActivity = activityLeadId === lead.id;
 
           return (
             <motion.div
-              key={lead.id}
+              key={`${row.band}-${lead.id}-${rowIndex}`}
               initial={{ opacity: 0.9 }}
               animate={{ opacity: 1 }}
               style={{
                 background: isDuplicateLead ? 'rgba(251,113,133,0.055)' : 'var(--lc-bg1)',
                 borderRadius: 14,
-                border: isDuplicateLead ? '2px solid rgba(251,113,133,0.4)' : `2px solid var(--lc-acc)`,
+                border: hasUrgentTags
+                  ? '2px solid #7f1d1d'
+                  : isDuplicateLead
+                    ? '2px solid rgba(251,113,133,0.4)'
+                    : `2px solid var(--lc-acc)`,
+                borderLeft: hasUrgentTags ? '3px solid #dc2626' : `3px solid ${sBadge.color}`,
                 overflow: 'hidden',
               }}
             >
@@ -1432,12 +1695,33 @@ const Leads = () => {
                           </>
                         )}
                       </div>
+
+                      {autoTags.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                          {autoTags.map((tag, idx) => (
+                            <span
+                              key={`${tag.label}-${idx}`}
+                              style={{
+                                fontSize: 9,
+                                fontWeight: 700,
+                                padding: '1px 7px',
+                                borderRadius: 999,
+                                color: tag.urgent ? '#7f1d1d' : '#111827',
+                                background: `${tag.color}33`,
+                                border: `1px solid ${tag.color}`,
+                              }}
+                            >
+                              {tag.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Right side — same compact layout as collapsed */}
-                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2, alignItems: 'flex-end' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, width: '100%', flexWrap: 'wrap' }}>
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, paddingTop: 2, alignItems: 'flex-end' }}>
+                    <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, flexWrap: 'wrap' }}>
                       <div style={{ width: 40, height: 4, background: 'var(--lc-bg3)', borderRadius: 2, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${progress}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
                       </div>
@@ -1456,8 +1740,8 @@ const Leads = () => {
                       <a href={`tel:${lead.phone}`} style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex' }} title="Call">
                         <PhoneCall size={10} color="var(--lc-mid)" />
                       </a>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setExpandedId(''); }} 
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setExpandedId(''); }}
                         style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} 
                         title="Collapse"
                       >
@@ -1469,7 +1753,7 @@ const Leads = () => {
                       <span className="lc-timestamp" style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', whiteSpace: 'nowrap' }}>
                         {createdAtStamp}
                       </span>
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           navigator.clipboard.writeText(`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`);
@@ -1503,6 +1787,14 @@ const Leads = () => {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                    </div>
+
+                    <div style={{ width: '100%', fontSize: 8.5, lineHeight: 1.2, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', textAlign: 'right' }}>
+                      Added by: {lead.creator?.name || '-'}
+                    </div>
+
+                    <div style={{ width: '100%', fontSize: 8.5, lineHeight: 1.2, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', textAlign: 'right' }}>
+                      Assigned to: {lead.members?.name || '-'}
                     </div>
                   </div>
                 </div>
@@ -1575,11 +1867,12 @@ const Leads = () => {
                     })}
                   </div>
                 </div>
+
               </div>
 
               {/* ─── Details Grid (Dynamic Dense) ─── */}
               <div className="lc-expand-grid" style={{
-                display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+                display: isLoggingActivity ? 'none' : 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
                 gap: 1, background: D.line, margin: '6px 16px 0', borderRadius: 10, overflow: 'hidden',
                 border: `1px solid ${D.line}`
               }}>
@@ -1665,7 +1958,7 @@ const Leads = () => {
               </div>
 
               {/* ─── Notes & Actions Section ─── */}
-              <div style={{ padding: '12px 16px', background: D.bgRow, borderTop: `1px solid ${D.line}` }}>
+              <div style={{ display: isLoggingActivity ? 'none' : 'block', padding: '12px 16px', background: D.bgRow, borderTop: `1px solid ${D.line}` }}>
                 {/* Notes row */}
                 {lead.notes && (
                   <div style={{ marginBottom: 10, padding: '8px 10px', background: D.bg1, borderRadius: 8, border: `1px solid ${D.line}` }}>
@@ -1687,7 +1980,89 @@ const Leads = () => {
                 {/* Geo Intelligence */}
                 <GeoIntelPanel lead={{ location: lead.preferredLocation, rawText: '', areas: m.areas }} />
 
+                {/* Activity Log */}
+                <div style={{ marginTop: 10, padding: '10px', borderRadius: 8, border: `1px solid ${D.line}`, background: D.bg1 }}>
+                  <div style={{ fontSize: 9, color: D.dim, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+                    Activity Log
+                  </div>
 
+                  {(() => {
+                    const raw = Array.isArray((lead as any).activity) ? ([...(lead as any).activity] as any[]) : [];
+                    raw.sort((a: any, b: any) => new Date(b.on).getTime() - new Date(a.on).getTime());
+                    const showAll = expandedActivityIds.has(lead.id);
+                    const visible = showAll ? raw : raw.slice(0, 3);
+
+                    return (
+                      <>
+                        {visible.length === 0 && <div style={{ fontSize: 11, color: D.dim }}>No activity logged yet.</div>}
+                        {visible.map((entry: any, idx: number) => (
+                          <div
+                            key={entry.id || idx}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: 8,
+                              paddingBottom: idx === visible.length - 1 ? 0 : 8,
+                              marginBottom: idx === visible.length - 1 ? 0 : 8,
+                              borderBottom: idx === visible.length - 1 ? 'none' : `1px dashed ${D.line}`,
+                            }}
+                          >
+                            <div style={{ fontSize: 14, lineHeight: '16px' }}>{actIcon(entry.type)}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 11, color: D.text }}>{entry.note || '-'}</div>
+                              <div style={{ fontSize: 10, color: D.dim, marginTop: 2 }}>
+                                {formatActivityDate(entry.on)} · {entry.by || '-'}
+                              </div>
+                            </div>
+                            <div style={{ width: 7, height: 7, borderRadius: 999, background: actColor(entry.type), marginTop: 5 }} />
+                          </div>
+                        ))}
+
+                        {raw.length > 3 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedActivityIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(lead.id)) next.delete(lead.id);
+                                else next.add(lead.id);
+                                return next;
+                              });
+                            }}
+                            style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: '#2563eb', background: 'transparent', border: 'none', padding: 0 }}
+                          >
+                            {showAll ? 'Show less' : `+ ${raw.length - 3} more entries`}
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+
+                <div style={{ marginTop: 12 }} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => setActivityLeadId(lead.id)}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-accent-foreground shadow-sm hover:opacity-95"
+                  >
+                    + Log Activity
+                  </button>
+                </div>
+
+              </div>
+
+              <div style={{ display: isLoggingActivity ? 'block' : 'none', margin: '6px 16px 12px' }} onClick={(e) => e.stopPropagation()}>
+                <LogActivitySheet
+                  open={activityLeadId === lead.id}
+                  onOpenChange={(nextOpen) => {
+                    if (!nextOpen) setActivityLeadId(null);
+                  }}
+                  lead={lead}
+                  pipelineStages={pipelineStages.map((stage: any) => ({ key: String(stage.key), label: String(stage.label) }))}
+                  authUser={user ? { id: String(user.id || ''), role: String(user.role || ''), fullName: user.fullName } : null}
+                  onSaved={() => setActivityLeadId(null)}
+                />
               </div>
             </motion.div>
           );

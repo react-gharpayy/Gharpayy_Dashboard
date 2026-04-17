@@ -1,6 +1,13 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ILead extends Document {
+  activity?: {
+    id: string;
+    on: Date;
+    by: string;
+    type: string;
+    note: string;
+  }[];
   name: string;
   phone: string;
   email?: string;
@@ -23,6 +30,14 @@ export interface ILead extends Document {
   needPreference?: string;
   specialRequests?: string;
   notes?: string;
+  lastOn?: Date;
+  stageOn?: Date;
+  nextOn?: Date;
+  visitOn?: Date;
+  visitDoneOn?: Date;
+  bookingOn?: Date;
+  touches?: number;
+  nextAction?: string;
   parsedMetadata?: Record<string, any>;
   leadScore: number;
   createdAt: Date;
@@ -53,6 +68,23 @@ const LeadSchema: Schema = new Schema(
     needPreference: { type: String },
     specialRequests: { type: String },
     notes: { type: String },
+    activity: [
+      {
+        id: { type: String, required: true },
+        on: { type: Date, required: true },
+        by: { type: String, required: true },
+        type: { type: String, required: true },
+        note: { type: String, required: true },
+      },
+    ],
+    lastOn: { type: Date },
+    stageOn: { type: Date },
+    nextOn: { type: Date },
+    visitOn: { type: Date },
+    visitDoneOn: { type: Date },
+    bookingOn: { type: Date },
+    touches: { type: Number, default: 0 },
+    nextAction: { type: String },
     parsedMetadata: { type: Schema.Types.Mixed },
     leadScore: { type: Number, default: 0 },
   },
