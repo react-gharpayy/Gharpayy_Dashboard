@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import AppLayout from '@/components/AppLayout';
 import EditLeadDialog from '@/components/EditLeadDialog';
-import { useLeadsPaginated, useOfficeZones, usePipelineStages, useCreateVisit, useProperties, useVisits, type LeadsQueryFilters } from '@/hooks/useCrmData';
+import { useAllVisibleLeads, useOfficeZones, usePipelineStages, useCreateVisit, useProperties, useVisits, type LeadsQueryFilters } from '@/hooks/useCrmData';
 import { useBulkUpdateLeads } from '@/hooks/useLeadDetails';
 import { useUpdateLead, useAgents, type LeadWithRelations } from '@/hooks/useCrmData';
 import { PIPELINE_STAGES, SOURCE_LABELS } from '@/types/crm';
-import { Filter, Download, PhoneCall, MessageCircle, MoreVertical, MapPin, ChevronDown, ChevronUp, Check, Loader2, CalendarDays, Plus } from 'lucide-react';
+import { Filter, Download, PhoneCall, MessageCircle, MoreVertical, MapPin, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Check, Loader2, CalendarDays, Plus } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +40,7 @@ import {
   getAutoTags,
   getBand,
   getMandatoryQueue,
+  STAGE_TIMER_DEFAULTS,
 } from '@/lib/leadsActivityAndPriority';
 
 // ─── helpers to map DB lead → card display ────────────────────────
@@ -96,7 +97,7 @@ const statusBadgeConfig: Record<string, { bg: string; color: string; border: str
   lost: { bg: 'rgba(100,116,139,0.08)', color: '#64748b', border: 'rgba(100,116,139,0.25)' },
 };
 
-const BAND_CONFIG: Record<string, { label: string; subtitle: string; color: string }> = {
+const CURRENT_BAND_CONFIG: Record<string, { label: string; subtitle: string; color: string }> = {
   mandatory: { label: 'MANDATORY - ACTION NOW', subtitle: 'Immediate actions required right now.', color: '#7f1d1d' },
   fire: { label: 'FIRE - MOVE-IN <= 7 DAYS', subtitle: 'Close or lose this week.', color: '#991b1b' },
   stuck: { label: 'STUCK - STAGE EXPIRED', subtitle: 'Days exceeded. Unblock today.', color: '#92400e' },
@@ -105,6 +106,164 @@ const BAND_CONFIG: Record<string, { label: string; subtitle: string; color: stri
   dormant: { label: 'DORMANT - 30+ DAYS SILENT', subtitle: 'Final attempt then mark lost.', color: '#1f2937' },
   closed: { label: 'BOOKED / ONBOARDING', subtitle: 'Handed off to next team.', color: '#064e3b' },
 };
+
+type MyZoneBucketKey = 'missed' | 'today' | 'tomorrow' | 'hot3' | 'week1' | 'week2' | 'week3' | 'week4' | 'next_month' | 'future' | 'no_date' | 'won' | 'lost';
+
+const MY_ZONE_BUCKET_CONFIG: Record<MyZoneBucketKey, { label: string; subtitle: string; color: string; defaultOpen: boolean }> = {
+  missed: { label: '🚨 MISSED', subtitle: 'Move-in passed - not closed', color: '#b91c1c', defaultOpen: true },
+  today: { label: '🔥 TODAY', subtitle: 'Move-in today - close right now', color: '#dc2626', defaultOpen: true },
+  tomorrow: { label: '⚡ TOMORROW', subtitle: 'Last chance - T+1', color: '#f97316', defaultOpen: true },
+  hot3: { label: '🎯 T+2 → T+3', subtitle: 'Book by end of week', color: '#f59e0b', defaultOpen: true },
+  week1: { label: '📅 WEEK 1 (Day 4-7)', subtitle: 'Move-in this week', color: '#d97706', defaultOpen: false },
+  week2: { label: '📆 WEEK 2', subtitle: 'Move-in day 8-14', color: '#0f766e', defaultOpen: false },
+  week3: { label: '📆 WEEK 3', subtitle: 'Move-in day 15-21', color: '#0d9488', defaultOpen: false },
+  week4: { label: '📆 WEEK 4', subtitle: 'Move-in day 22-30', color: '#0891b2', defaultOpen: false },
+  next_month: { label: '🗓 NEXT MONTH', subtitle: '31-60 days out', color: '#0284c7', defaultOpen: false },
+  future: { label: '🔭 FUTURE', subtitle: '60+ days out - plan early', color: '#475569', defaultOpen: false },
+  no_date: { label: '❓ NO DATE SET', subtitle: 'Move-in date missing', color: '#64748b', defaultOpen: false },
+  won: { label: '🏆 WON', subtitle: 'Booked / Checked in', color: '#15803d', defaultOpen: false },
+  lost: { label: '💀 LOST', subtitle: 'Closed lost - learn from these', color: '#6b7280', defaultOpen: false },
+};
+
+const MY_ZONE_BUCKET_ORDER: MyZoneBucketKey[] = [
+  'missed',
+  'today',
+  'tomorrow',
+  'hot3',
+  'week1',
+  'week2',
+  'week3',
+  'week4',
+  'next_month',
+  'future',
+  'no_date',
+  'won',
+  'lost',
+];
+
+const MY_ZONE_OPEN_DEFAULTS: Record<MyZoneBucketKey, boolean> = {
+  missed: true,
+  today: true,
+  tomorrow: true,
+  hot3: true,
+  week1: false,
+  week2: false,
+  week3: false,
+  week4: false,
+  next_month: false,
+  future: false,
+  no_date: false,
+  won: false,
+  lost: false,
+};
+
+type DisplayRow =
+  | { kind: 'header'; band: string }
+  | { kind: 'lead'; band: string; lead: LeadWithRelations }
+  | { kind: 'footer'; band: string };
+const SECTION_PAGE_SIZE = 50;
+
+function atStartOfDay(value: unknown): Date | null {
+  if (!value) return null;
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getTodayStart() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function daysUntilNormalized(value: unknown): number | null {
+  const target = atStartOfDay(value);
+  if (!target) return null;
+  const today = getTodayStart();
+  return Math.floor((target.getTime() - today.getTime()) / 86400000);
+}
+
+function daysSinceNormalized(value: unknown): number | null {
+  const source = atStartOfDay(value);
+  if (!source) return null;
+  const today = getTodayStart();
+  return Math.floor((today.getTime() - source.getTime()) / 86400000);
+}
+
+function normalizeStage(status: string | undefined | null) {
+  return String(status || '').trim().toLowerCase();
+}
+
+function isWonStage(status: string | undefined | null) {
+  const stage = normalizeStage(status);
+  if (!stage) return false;
+  if (['booked', 'check_in', 'checkin', 'won', 'win'].includes(stage)) return true;
+  return /(booked|booking|check[_\s-]?in|won|win)/.test(stage);
+}
+
+function isLostStage(status: string | undefined | null) {
+  return normalizeStage(status) === 'lost';
+}
+
+function isClosedStage(status: string | undefined | null) {
+  return isWonStage(status) || isLostStage(status);
+}
+
+function getBucket(lead: LeadWithRelations): MyZoneBucketKey {
+  if (isWonStage(lead.status)) return 'won';
+  if (isLostStage(lead.status)) return 'lost';
+
+  if (!lead.moveInDate) return 'no_date';
+  const days = daysUntilNormalized(lead.moveInDate);
+  if (days === null) return 'no_date';
+  if (days < 0) return 'missed';
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  if (days <= 3) return 'hot3';
+  if (days <= 7) return 'week1';
+  if (days <= 14) return 'week2';
+  if (days <= 21) return 'week3';
+  if (days <= 30) return 'week4';
+  if (days <= 60) return 'next_month';
+  return 'future';
+}
+
+function urgencyScore(lead: LeadWithRelations) {
+  let score = 0;
+  const moveInDays = daysUntilNormalized(lead.moveInDate);
+  const lastContactDays = daysSinceNormalized(lead.lastOn || lead.lastActivityAt) ?? 999;
+  const daysInStage = daysSinceNormalized(lead.stageOn) ?? 0;
+  const touches = Number(lead.touches || 0);
+  const stageRule = STAGE_TIMER_DEFAULTS[normalizeStage(lead.status)];
+
+  if (moveInDays !== null) {
+    if (moveInDays < 0) score += 1000;
+    else if (moveInDays === 0) score += 500;
+    else if (moveInDays <= 1) score += 300;
+    else if (moveInDays <= 3) score += 200;
+    else if (moveInDays <= 7) score += 100;
+    else score += Math.max(0, 80 - moveInDays);
+  }
+
+  if (touches === 0) score += 200;
+  if (lastContactDays > 7) score += lastContactDays;
+
+  if (stageRule?.maxDays && daysInStage > stageRule.maxDays) {
+    score += (daysInStage - stageRule.maxDays) * 10;
+  }
+
+  return score;
+}
+
+function getLostReasonLabel(lead: LeadWithRelations) {
+  const direct = (lead as any).lostReason || (lead.parsedMetadata as any)?.lostReason;
+  if (direct && String(direct).trim()) return String(direct).trim();
+  const notes = String(lead.notes || '');
+  const match = notes.match(/lost\s*reason\s*[:\-]\s*([^\n;]+)/i);
+  if (match?.[1]) return match[1].trim();
+  return 'Unknown / Not captured';
+}
 
 // ─── Compute a simple progress from lead fields ────────────────────────
 function computeLeadProgress(lead: LeadWithRelations) {
@@ -140,7 +299,9 @@ const Leads = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showFiltersMobile, setShowFiltersMobile] = useState(false);
-  const [page, setPage] = useState(0);
+  const [sectionPages, setSectionPages] = useState<Record<string, number>>({});
+  const [scrollTarget, setScrollTarget] = useState<string | null>(null);
+  const [scrollToken, setScrollToken] = useState(0);
   const [selectedLeadForEdit, setSelectedLeadForEdit] = useState<LeadWithRelations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   
@@ -178,6 +339,8 @@ const Leads = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [activityLeadId, setActivityLeadId] = useState<string | null>(null);
   const [expandedActivityIds, setExpandedActivityIds] = useState<Set<string>>(new Set());
+  const [myZoneUrgentOpen, setMyZoneUrgentOpen] = useState(true);
+  const [myZoneBucketOpen, setMyZoneBucketOpen] = useState<Record<MyZoneBucketKey, boolean>>(MY_ZONE_OPEN_DEFAULTS);
   const [bandOpen, setBandOpen] = useState<Record<string, boolean>>({
     mandatory: true,
     fire: true,
@@ -204,9 +367,9 @@ const Leads = () => {
 
     const refreshLeads = () => {
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
-      void queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
+      void queryClient.invalidateQueries({ queryKey: ['leads-all-visible'] });
       void queryClient.invalidateQueries({ queryKey: ['leads-infinite'] });
-      void queryClient.refetchQueries({ queryKey: ['leads-paginated'], type: 'active' });
+      void queryClient.refetchQueries({ queryKey: ['leads-all-visible'], type: 'active' });
     };
 
     const checkForExternalUpdates = () => {
@@ -285,7 +448,7 @@ const Leads = () => {
     q: debouncedSearchQuery.trim() || undefined,
     status: filterStatus,
     source: filterSource,
-    zone: filterZone,
+    zone: filterZone === 'mistakes' ? 'all' : filterZone,
     assignedMemberId: filterMember,
     duplicate: filterDuplicate as LeadsQueryFilters['duplicate'],
     sort: filterDateMode === 'oldest' ? 'oldest' : filterDateMode === 'alphabetical' ? 'alphabetical' : 'newest',
@@ -295,14 +458,17 @@ const Leads = () => {
   };
 
   useEffect(() => {
-    setPage(0);
+    setSectionPages({});
   }, [debouncedSearchQuery, filterSource, filterStatus, filterDuplicate, filterZone, filterMember, filterDateMode, filterDate, filterMonth, fromDate, toDate, hasValidCustomRange]);
-  
-  const PAGE_SIZE = 50;
-  const { data: paginatedData, isLoading } = useLeadsPaginated(page, PAGE_SIZE, serverFilters);
-  const leads = paginatedData?.leads;
-  const totalLeads = paginatedData?.total ?? 0;
-  const totalPages = Math.ceil(totalLeads / PAGE_SIZE);
+
+  const allVisibleFilters = useMemo(() => ({
+    ...serverFilters,
+    zone: serverFilters.zone === 'mistakes' ? 'all' : serverFilters.zone,
+  }), [serverFilters]);
+
+  const { data: allLeads, isLoading } = useAllVisibleLeads(allVisibleFilters);
+  const leads = allLeads;
+  const totalLeads = allLeads?.length ?? 0;
   const subtitleCount = `${totalLeads} leads found`;
   const { data: members } = useAgents();
   const { data: officeZones } = useOfficeZones();
@@ -323,6 +489,29 @@ const Leads = () => {
   const isMemberRole = user?.role === 'member';
   const isAdminRole = user?.role === 'admin';
   const isAssignedByMeReadOnly = isMemberRole && filterZone === 'assigned_by_me';
+  const isMistakesTab = isMemberRole && filterZone === 'mistakes';
+  const isMyZoneTab = isMemberRole && filterZone !== 'mistakes';
+  const sectionPageKey = (scope: 'current' | 'myzone', band: string) => `${scope}:${band}`;
+  const getSectionPage = (scope: 'current' | 'myzone', band: string) => sectionPages[sectionPageKey(scope, band)] ?? 0;
+  const setSectionPage = (scope: 'current' | 'myzone', band: string, nextPage: number) => {
+    const key = sectionPageKey(scope, band);
+    setSectionPages((prev) => ({ ...prev, [key]: Math.max(0, nextPage) }))
+  };
+
+  useEffect(() => {
+    if (!scrollTarget) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.querySelector(`[data-section-focus="${scrollTarget}"]`);
+      if (target instanceof HTMLElement) {
+        const top = window.scrollY + target.getBoundingClientRect().top - 18;
+        window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      }
+      setScrollTarget(null);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [scrollTarget, scrollToken, sectionPages]);
 
   useEffect(() => {
     if (!filterZone) {
@@ -382,6 +571,7 @@ const Leads = () => {
         filterZone !== 'other_zones' &&
         filterZone !== 'assigned_by_me' &&
         filterZone !== 'assigned_to_me' &&
+        filterZone !== 'mistakes' &&
         (l as any).zone !== filterZone
       ) return false;
       
@@ -398,7 +588,7 @@ const Leads = () => {
     [mandatoryQueue]
   );
 
-  const groupedBands = useMemo(() => {
+  const currentGroupedBands = useMemo(() => {
     const groups: Record<string, LeadWithRelations[]> = {
       mandatory: [],
       fire: [],
@@ -434,32 +624,289 @@ const Leads = () => {
     return groups;
   }, [filtered, mandatoryLeadIds, mandatoryQueue]);
 
-  const orderedBandKeys = ['mandatory', 'fire', 'stuck', 'active', 'future', 'dormant', 'closed'];
+  const currentOrderedBandKeys = ['mandatory', 'fire', 'stuck', 'active', 'future', 'dormant', 'closed'];
 
-  const displayRows = useMemo(() => {
-    const rows: Array<{ kind: 'header'; band: string } | { kind: 'lead'; band: string; lead: LeadWithRelations }> = [];
+  const currentBandWindows = useMemo(() => {
+    return currentOrderedBandKeys.reduce((acc, band) => {
+      const leadsForBand = currentGroupedBands[band] || [];
+      const total = leadsForBand.length;
+      const totalPages = Math.max(1, Math.ceil(total / SECTION_PAGE_SIZE));
+      const page = Math.min(getSectionPage('current', band), totalPages - 1);
+      const start = page * SECTION_PAGE_SIZE;
+      const visibleLeads = leadsForBand.slice(start, start + SECTION_PAGE_SIZE);
+      acc[band] = {
+        total,
+        totalPages,
+        page,
+        start,
+        end: Math.min(start + SECTION_PAGE_SIZE, total),
+        visibleIds: new Set(visibleLeads.map((lead) => lead.id)),
+      };
+      return acc;
+    }, {} as Record<string, { total: number; totalPages: number; page: number; start: number; end: number; visibleIds: Set<string> }>);
+  }, [currentGroupedBands, sectionPages]);
 
-    orderedBandKeys.forEach((band) => {
-      const leadsForBand = groupedBands[band] || [];
+  const currentDisplayRows = useMemo(() => {
+    const rows: DisplayRow[] = [];
+
+    currentOrderedBandKeys.forEach((band) => {
+      const leadsForBand = currentGroupedBands[band] || [];
       if (leadsForBand.length === 0) return;
+      const window = currentBandWindows[band];
+      const totalPages = window?.totalPages || 1;
       rows.push({ kind: 'header', band });
       if (bandOpen[band] !== false) {
-        leadsForBand.forEach((lead) => rows.push({ kind: 'lead', band, lead }));
+        leadsForBand.forEach((lead) => {
+          if (window?.visibleIds.has(lead.id)) {
+            rows.push({ kind: 'lead', band, lead });
+          }
+        });
+        if (totalPages > 1) {
+          rows.push({ kind: 'footer', band });
+        }
       }
     });
 
     return rows;
-  }, [groupedBands, bandOpen]);
+  }, [currentBandWindows, currentGroupedBands, bandOpen]);
+
+  const myZoneBuckets = useMemo(() => {
+    const groups: Record<MyZoneBucketKey, LeadWithRelations[]> = {
+      missed: [],
+      today: [],
+      tomorrow: [],
+      hot3: [],
+      week1: [],
+      week2: [],
+      week3: [],
+      week4: [],
+      next_month: [],
+      future: [],
+      no_date: [],
+      won: [],
+      lost: [],
+    };
+
+    filtered.forEach((lead) => {
+      const bucket = getBucket(lead);
+      groups[bucket].push(lead);
+    });
+
+    MY_ZONE_BUCKET_ORDER.forEach((bucket) => {
+      groups[bucket].sort((a, b) => urgencyScore(b) - urgencyScore(a));
+    });
+
+    return groups;
+  }, [filtered]);
+
+  const myZoneUrgentQueue = useMemo(() => {
+    const queue: Array<{ lead: LeadWithRelations; priority: 1 | 2 | 3; reason: string; cta: string; score: number }> = [];
+
+    for (const lead of filtered) {
+      if (isClosedStage(lead.status)) continue;
+
+      const touches = Number(lead.touches || 0);
+      const createdDays = daysSinceNormalized(lead.createdAt) || 0;
+      const moveInDays = daysUntilNormalized(lead.moveInDate);
+      const visitDoneDays = daysSinceNormalized(lead.visitDoneOn);
+      const lastContactDays = daysSinceNormalized(lead.lastOn || lead.lastActivityAt);
+      const stageDays = daysSinceNormalized(lead.stageOn) || 0;
+      const followUpDays = daysUntilNormalized(lead.nextOn);
+      const stageRule = STAGE_TIMER_DEFAULTS[normalizeStage(lead.status)];
+
+      if (touches === 0) {
+        queue.push({ lead, priority: 1, reason: `Never called - added ${createdDays}d ago`, cta: 'Call Now', score: urgencyScore(lead) });
+        continue;
+      }
+
+      if (moveInDays !== null && moveInDays < 0) {
+        queue.push({ lead, priority: 1, reason: `Move-in was ${Math.abs(moveInDays)}d ago - close or mark lost`, cta: 'Act Now', score: urgencyScore(lead) });
+        continue;
+      }
+
+      if (moveInDays === 0) {
+        queue.push({ lead, priority: 1, reason: 'Move-in TODAY - close right now', cta: 'Close Now', score: urgencyScore(lead) });
+        continue;
+      }
+
+      if (visitDoneDays !== null && visitDoneDays >= 2 && (lastContactDays === null || lastContactDays >= 2)) {
+        queue.push({ lead, priority: 1, reason: `Visit done ${visitDoneDays}d ago - no follow-up`, cta: 'Call Now', score: urgencyScore(lead) });
+        continue;
+      }
+
+      if (normalizeStage(lead.status) === 'agreement_sent' && stageDays >= 2) {
+        queue.push({ lead, priority: 2, reason: 'Agreement sent 2+ days ago - chase signature', cta: 'Follow Up', score: urgencyScore(lead) });
+        continue;
+      }
+
+      if (moveInDays === 1) {
+        queue.push({ lead, priority: 2, reason: 'Move-in TOMORROW - last chance to close', cta: 'Close Now', score: urgencyScore(lead) });
+        continue;
+      }
+
+      if (stageRule?.maxDays && stageDays > stageRule.maxDays) {
+        queue.push({ lead, priority: 2, reason: `Stage expired ${stageDays - stageRule.maxDays}d ago: ${stageRule.rule || stageRule.label}`, cta: 'Act Now', score: urgencyScore(lead) });
+        continue;
+      }
+
+      if (followUpDays !== null && followUpDays < 0) {
+        queue.push({ lead, priority: 3, reason: `Follow-up ${Math.abs(followUpDays)}d overdue`, cta: 'Follow Up', score: urgencyScore(lead) });
+      }
+    }
+
+    queue.sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return b.score - a.score;
+    });
+
+    return queue;
+  }, [filtered]);
+
+  const myZoneGroupedBands = useMemo(() => {
+    const urgentLeads = myZoneUrgentQueue.map((item) => item.lead);
+    return {
+      ...myZoneBuckets,
+      urgent: urgentLeads,
+    } as Record<string, LeadWithRelations[]>;
+  }, [myZoneBuckets, myZoneUrgentQueue]);
+
+  const myZoneUrgentWindow = useMemo(() => {
+    const leadsForBand = myZoneUrgentQueue.map((item) => item.lead);
+    const total = leadsForBand.length;
+    const totalPages = Math.max(1, Math.ceil(total / SECTION_PAGE_SIZE));
+    const page = Math.min(getSectionPage('myzone', 'urgent'), totalPages - 1);
+    const start = page * SECTION_PAGE_SIZE;
+    const visibleLeads = leadsForBand.slice(start, start + SECTION_PAGE_SIZE);
+
+    return {
+      total,
+      totalPages,
+      page,
+      start,
+      end: Math.min(start + SECTION_PAGE_SIZE, total),
+      visibleIds: new Set(visibleLeads.map((lead) => lead.id)),
+    };
+  }, [myZoneUrgentQueue, sectionPages]);
+
+  const myZoneBandWindows = useMemo(() => {
+    return MY_ZONE_BUCKET_ORDER.reduce((acc, band) => {
+      const leadsForBand = myZoneBuckets[band] || [];
+      const total = leadsForBand.length;
+      const totalPages = Math.max(1, Math.ceil(total / SECTION_PAGE_SIZE));
+      const page = Math.min(getSectionPage('myzone', band), totalPages - 1);
+      const start = page * SECTION_PAGE_SIZE;
+      const visibleLeads = leadsForBand.slice(start, start + SECTION_PAGE_SIZE);
+      acc[band] = {
+        total,
+        totalPages,
+        page,
+        start,
+        end: Math.min(start + SECTION_PAGE_SIZE, total),
+        visibleIds: new Set(visibleLeads.map((lead) => lead.id)),
+      };
+      return acc;
+    }, {} as Record<string, { total: number; totalPages: number; page: number; start: number; end: number; visibleIds: Set<string> }>);
+  }, [myZoneBuckets, sectionPages]);
+
+  const myZoneDisplayRows = useMemo(() => {
+    const rows: DisplayRow[] = [];
+
+    const urgentLeads = myZoneUrgentQueue.map((item) => item.lead);
+    if (urgentLeads.length > 0) {
+      const urgentTotalPages = myZoneUrgentWindow.totalPages;
+      rows.push({ kind: 'header', band: 'urgent' });
+      if (myZoneUrgentOpen) {
+        urgentLeads.forEach((lead) => {
+          if (myZoneUrgentWindow.visibleIds.has(lead.id)) {
+            rows.push({ kind: 'lead', band: 'urgent', lead });
+          }
+        });
+        if (urgentTotalPages > 1) {
+          rows.push({ kind: 'footer', band: 'urgent' });
+        }
+      }
+    }
+
+    MY_ZONE_BUCKET_ORDER.forEach((bucket) => {
+      const leadsForBucket = myZoneBuckets[bucket];
+      if (!leadsForBucket || leadsForBucket.length === 0) return;
+      const window = myZoneBandWindows[bucket];
+      rows.push({ kind: 'header', band: bucket });
+      if (myZoneBucketOpen[bucket] !== false) {
+        leadsForBucket.forEach((lead) => {
+          if (window?.visibleIds.has(lead.id)) {
+            rows.push({ kind: 'lead', band: bucket, lead });
+          }
+        });
+        if ((window?.totalPages || 1) > 1) {
+          rows.push({ kind: 'footer', band: bucket });
+        }
+      }
+    });
+
+    return rows;
+  }, [myZoneBandWindows, myZoneBuckets, myZoneBucketOpen, myZoneUrgentOpen, myZoneUrgentQueue, myZoneUrgentWindow.visibleIds]);
+
+  const activeGroupedBands = isMyZoneTab ? myZoneGroupedBands : currentGroupedBands;
+  const activeDisplayRows = isMyZoneTab ? myZoneDisplayRows : currentDisplayRows;
+  const activeBandConfig: Record<string, { label: string; subtitle: string; color: string }> = isMyZoneTab
+    ? {
+        ...MY_ZONE_BUCKET_CONFIG,
+        urgent: { label: '⚠ URGENT', subtitle: 'Immediate action queue for active leads', color: '#991b1b' },
+      }
+    : CURRENT_BAND_CONFIG;
+
+  const mistakesData = useMemo(() => {
+    const openLeads = filtered.filter((lead) => !isClosedStage(lead.status));
+    const lostLeads = filtered.filter((lead) => isLostStage(lead.status));
+
+    const ourFaultLeads = openLeads.filter((lead) => {
+      const ageDays = daysSinceNormalized(lead.createdAt) ?? 0;
+      const lastContactDays = daysSinceNormalized(lead.lastOn || lead.lastActivityAt);
+      return ageDays >= 15 && (lastContactDays === null || lastContactDays >= 7);
+    });
+
+    const missedLeads = openLeads.filter((lead) => {
+      const moveInDays = daysUntilNormalized(lead.moveInDate);
+      return moveInDays !== null && moveInDays < 0;
+    });
+
+    const neverCalledLeads = openLeads.filter((lead) => Number(lead.touches || 0) === 0);
+
+    const lostReasonMap = new Map<string, number>();
+    lostLeads.forEach((lead) => {
+      const reason = getLostReasonLabel(lead);
+      lostReasonMap.set(reason, (lostReasonMap.get(reason) || 0) + 1);
+    });
+
+    const lostReasons = Array.from(lostReasonMap.entries())
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      ourFaultLeads,
+      missedLeads,
+      neverCalledLeads,
+      lostLeads,
+      lostReasons,
+      totals: {
+        ourFault: ourFaultLeads.length,
+        missed: missedLeads.length,
+        neverCalled: neverCalledLeads.length,
+        totalLost: lostLeads.length,
+      },
+    };
+  }, [filtered]);
 
   const statsBar = useMemo(() => {
     const queue = mandatoryQueue.length;
-    const stuck = (groupedBands.stuck || []).length;
+    const stuck = (currentGroupedBands.stuck || []).length;
     const silent = filtered.filter((lead) => (lead.touches || 0) === 0).length;
     const extra = filtered.filter((lead) => String(lead.assignedMemberId || '') !== String(user?.id || '')).length;
     const dups = filtered.filter((lead) => !!lead.isDuplicate).length;
 
     return { queue, stuck, silent, extra, dups };
-  }, [filtered, groupedBands.stuck, mandatoryQueue.length, user?.id]);
+  }, [filtered, currentGroupedBands.stuck, mandatoryQueue.length, user?.id]);
 
   const toggleSelect = (id: string) => {
     const next = new Set(selectedIds);
@@ -789,11 +1236,6 @@ const Leads = () => {
     setShowAssignedOptions(false);
   };
 
-  const changePage = (nextPage: number) => {
-    setPage(nextPage);
-    window.scrollTo({ top: 0, behavior: 'auto' });
-  };
-
   const openLeadIntakeInNewTab = () => {
     window.open('/leads/intake', '_blank', 'noopener,noreferrer');
   };
@@ -1121,6 +1563,7 @@ const Leads = () => {
             { key: 'other_zones', label: 'Extra Zones' },
             { key: 'assigned_by_me', label: 'Assigned by Me' },
             { key: 'assigned_to_me', label: 'Assigned to Me' },
+            { key: 'mistakes', label: 'Mistakes' },
           ].map((tab) => {
             const isActive = filterZone === tab.key;
             return (
@@ -1171,7 +1614,7 @@ const Leads = () => {
       <MemberDailyReminderPopup />
 
       {/* Bulk actions */}
-      {selectedIds.size > 0 && canManageLeadAssignments && !isAssignedByMeReadOnly && (
+      {!isMistakesTab && selectedIds.size > 0 && canManageLeadAssignments && !isAssignedByMeReadOnly && (
         <motion.div
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1199,6 +1642,122 @@ const Leads = () => {
       {/*  LEAD CARDS — NEW UI                                       */}
       {/* ═══════════════════════════════════════════════════════════ */}
 
+      {isMyZoneTab && myZoneUrgentQueue.length === 0 && (
+        <div className="mb-4 rounded-md border border-emerald-400/50 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-100">
+          Queue clear - no urgent actions pending
+        </div>
+      )}
+
+      {isMistakesTab && (
+        <div className="mb-4 space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-red-300/40 bg-red-50 p-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-red-700">Our Fault</div>
+              <div className="mt-1 text-2xl font-bold text-red-900">{mistakesData.totals.ourFault}</div>
+              <div className="text-[11px] text-red-700">15+ days, not closed</div>
+            </div>
+            <div className="rounded-xl border border-amber-300/40 bg-amber-50 p-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Missed</div>
+              <div className="mt-1 text-2xl font-bold text-amber-900">{mistakesData.totals.missed}</div>
+              <div className="text-[11px] text-amber-700">Move-in date passed</div>
+            </div>
+            <div className="rounded-xl border border-orange-300/40 bg-orange-50 p-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-orange-700">Never Called</div>
+              <div className="mt-1 text-2xl font-bold text-orange-900">{mistakesData.totals.neverCalled}</div>
+              <div className="text-[11px] text-orange-700">Zero contact made</div>
+            </div>
+            <div className="rounded-xl border border-slate-300/40 bg-slate-50 p-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-700">Total Lost</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{mistakesData.totals.totalLost}</div>
+              <div className="text-[11px] text-slate-700">Closed lost deals</div>
+            </div>
+          </div>
+
+          {mistakesData.totals.totalLost > 0 && (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h3 className="text-sm font-semibold text-foreground">WHY WE LOST</h3>
+              <div className="mt-3 space-y-2">
+                {mistakesData.lostReasons.map((item) => {
+                  const width = Math.max(4, Math.round((item.count / mistakesData.totals.totalLost) * 100));
+                  return (
+                    <div key={item.reason} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-foreground">{item.reason}</span>
+                        <span className="font-semibold text-muted-foreground">{item.count}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-secondary">
+                        <div className="h-2 rounded-full bg-slate-500" style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {mistakesData.totals.ourFault > 0 && (
+            <div className="rounded-xl border border-red-200/50 bg-red-50/40 p-4">
+              <h3 className="text-sm font-semibold text-red-800">Our Fault Leads</h3>
+              <div className="mt-3 space-y-2">
+                {mistakesData.ourFaultLeads.map((lead) => {
+                  const addedDays = daysSinceNormalized(lead.createdAt) || 0;
+                  const lastContactDays = daysSinceNormalized(lead.lastOn || lead.lastActivityAt);
+                  const diagnosis = Number(lead.touches || 0) === 0
+                    ? 'Zero calls made - lead abandoned immediately'
+                    : (lastContactDays !== null && lastContactDays >= 30)
+                      ? 'Dormant 30+ days - final attempt or mark lost'
+                      : `${lastContactDays ?? 0}d without follow-up - this is on us`;
+
+                  return (
+                    <div key={`fault-${lead.id}`} className="rounded-lg border border-red-200/60 bg-white px-3 py-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">{lead.name}</p>
+                          <p className="text-[11px] text-red-700">Added {addedDays}d ago</p>
+                        </div>
+                        <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => setExpandedId(lead.id)}>Open</Button>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {lead.preferredLocation || '-'} | {lead.budget || '-'} | Stage: {lead.status} | Last contact: {lastContactDays === null ? 'Never' : `${lastContactDays}d ago`} | Move-in: {lead.moveInDate || '-'}
+                      </p>
+                      <p className="mt-1 text-[11px] text-red-800">{diagnosis}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {mistakesData.totals.missed > 0 && (
+            <div className="rounded-xl border border-amber-200/50 bg-amber-50/40 p-4">
+              <h3 className="text-sm font-semibold text-amber-800">Missed Move-in Leads</h3>
+              <div className="mt-3 space-y-2">
+                {mistakesData.missedLeads.map((lead) => {
+                  const daysPast = Math.abs(daysUntilNormalized(lead.moveInDate) || 0);
+                  return (
+                    <div key={`missed-${lead.id}`} className="rounded-lg border border-amber-200/60 bg-white px-3 py-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">{lead.name}</p>
+                          <p className="text-[11px] text-amber-700">Move-in was {daysPast}d ago</p>
+                        </div>
+                        <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => setExpandedId(lead.id)}>Open</Button>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {lead.preferredLocation || '-'} | {lead.budget || '-'} | Stage: {lead.status} | Touches: {Number(lead.touches || 0)}
+                      </p>
+                      <p className="mt-1 text-[11px] text-amber-800">Either they found a PG elsewhere, or we failed to close. Mark lost with correct reason.</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!isMistakesTab && (
+      <>
       <style>{`
         :root {
           --lc-bg0: #ffffff; --lc-bg1: #f8f9fc; --lc-bg2: #f1f3f8; --lc-bg3: #e8ebf2;
@@ -1236,24 +1795,98 @@ const Leads = () => {
       `}</style>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {displayRows.map((row, rowIndex) => {
+        {activeDisplayRows.map((row, rowIndex) => {
           if (row.kind === 'header') {
-            const cfg = BAND_CONFIG[row.band];
-            const count = groupedBands[row.band]?.length || 0;
+            const cfg = activeBandConfig[row.band];
+            const count = activeGroupedBands[row.band]?.length || 0;
             return (
-              <button
+              <div
                 key={`band-${row.band}`}
-                type="button"
-                onClick={() => setBandOpen((prev) => ({ ...prev, [row.band]: !prev[row.band] }))}
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-left"
+                data-section-focus={isMyZoneTab ? `myzone:${row.band}` : `current:${row.band}`}
+                className="flex w-full items-stretch overflow-hidden rounded-xl"
                 style={{ background: cfg.color, color: '#fff' }}
               >
-                <div>
-                  <div className="text-xs font-bold tracking-wide">{cfg.label}</div>
-                  <div className="text-[11px] text-white/80">{cfg.subtitle}</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isMyZoneTab) {
+                      if (row.band === 'urgent') {
+                        setMyZoneUrgentOpen((prev) => !prev);
+                      } else {
+                        const bucket = row.band as MyZoneBucketKey;
+                        setMyZoneBucketOpen((prev) => ({ ...prev, [bucket]: !prev[bucket] }));
+                      }
+                    } else {
+                      setBandOpen((prev) => ({ ...prev, [row.band]: !prev[row.band] }));
+                    }
+                  }}
+                  className="flex min-w-0 flex-1 items-center justify-between px-4 py-3 text-left"
+                >
+                  <div className="flex min-w-0 flex-col gap-0.5 text-left">
+                    <div className="text-xs font-bold tracking-wide">{cfg.label}</div>
+                    <div className="text-[11px] text-white/80">{cfg.subtitle}</div>
+                  </div>
+                  <div className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold">{count}</div>
+                </button>
+              </div>
+            );
+          }
+
+          if (row.kind === 'footer') {
+            const sectionWindow = isMyZoneTab
+              ? (row.band === 'urgent' ? myZoneUrgentWindow : myZoneBandWindows[row.band])
+              : currentBandWindows[row.band];
+            const totalPages = sectionWindow?.totalPages || 1;
+            const currentPage = sectionWindow?.page || 0;
+            const canPrev = currentPage > 0;
+            const canNext = currentPage < totalPages - 1;
+            return (
+              <div
+                key={`band-footer-${row.band}`}
+                className="flex items-center justify-end gap-2 rounded-xl border border-dashed border-border bg-muted/35 px-3 py-2"
+              >
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {currentPage + 1}/{totalPages}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={`Previous ${row.band}`}
+                    disabled={!canPrev}
+                    onClick={() => {
+                      if (!canPrev) return;
+                      setScrollTarget(isMyZoneTab ? `myzone:${row.band}` : `current:${row.band}`);
+                      setScrollToken((value) => value + 1);
+                      if (isMyZoneTab) {
+                        setSectionPage('myzone', row.band, currentPage - 1);
+                      } else {
+                        setSectionPage('current', row.band, currentPage - 1);
+                      }
+                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Next ${row.band}`}
+                    disabled={!canNext}
+                    onClick={() => {
+                      if (!canNext) return;
+                      setScrollTarget(isMyZoneTab ? `myzone:${row.band}` : `current:${row.band}`);
+                      setScrollToken((value) => value + 1);
+                      if (isMyZoneTab) {
+                        setSectionPage('myzone', row.band, currentPage + 1);
+                      } else {
+                        setSectionPage('current', row.band, currentPage + 1);
+                      }
+                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronRight size={12} />
+                  </button>
                 </div>
-                <div className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold">{count}</div>
-              </button>
+              </div>
             );
           }
 
@@ -1282,7 +1915,6 @@ const Leads = () => {
           const budgetDisplay = m.budgetRanges?.length > 0
             ? m.budgetRanges.map((r: any) => r.display).join(', ')
             : lead.budget || '';
-
           if (!isExpanded) {
             // ─── COLLAPSED CARD ───
             return (
@@ -2068,28 +2700,13 @@ const Leads = () => {
           );
         })}
       </div>
+      </>
+      )}
 
-      {filtered.length === 0 && (
+      {!isMistakesTab && filtered.length === 0 && (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--lc-dim)' }}>
           <div style={{ fontSize: 48, opacity: 0.35, marginBottom: 12 }}>📋</div>
           <div style={{ fontSize: 14 }}>No leads match the current filters</div>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 mb-20 pb-2 md:mb-16 md:pb-0">
-          <p className="text-2xs text-muted-foreground">
-            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalLeads)} of {totalLeads}
-          </p>
-          <div className="flex gap-1.5">
-            <Button variant="outline" size="sm" className="h-7 text-2xs rounded-lg" disabled={page === 0} onClick={() => changePage(page - 1)}>
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" className="h-7 text-2xs rounded-lg" disabled={page >= totalPages - 1} onClick={() => changePage(page + 1)}>
-              Next
-            </Button>
-          </div>
         </div>
       )}
 

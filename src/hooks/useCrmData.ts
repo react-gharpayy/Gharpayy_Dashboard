@@ -245,9 +245,9 @@ export const useLeadsPaginated = (page = 0, pageSize = 50, filters?: LeadsQueryF
   });
 
 // Leads (all visible for current user) - walks paginated API to collect full dataset.
-export const useAllVisibleLeads = () =>
+export const useAllVisibleLeads = (filters?: LeadsQueryFilters) =>
   useQuery({
-    queryKey: ['leads-all-visible'],
+    queryKey: ['leads-all-visible', filters || {}],
     queryFn: async () => {
       const pageSize = 100;
       let skip = 0;
@@ -259,6 +259,18 @@ export const useAllVisibleLeads = () =>
         params.set('skip', String(skip));
         params.set('limit', String(pageSize));
         params.set('sort', 'newest');
+
+        if (filters?.q) params.set('q', filters.q);
+        if (filters?.status && filters.status !== 'all') params.set('status', filters.status);
+        if (filters?.source && filters.source !== 'all') params.set('source', filters.source);
+        if (filters?.zone && filters.zone !== 'all') params.set('zone', filters.zone);
+        if (filters?.assignedMemberId && filters.assignedMemberId !== 'all') {
+          params.set('assignedMemberId', filters.assignedMemberId);
+        }
+        if (filters?.duplicate && filters.duplicate !== 'all') params.set('duplicate', filters.duplicate);
+        if (filters?.period && filters.period !== 'all') params.set('period', filters.period);
+        if (filters?.from) params.set('from', filters.from);
+        if (filters?.to) params.set('to', filters.to);
 
         const res = await fetch(`/api/leads?${params.toString()}`);
         if (!res.ok) throw new Error('Failed to fetch complete leads list');
