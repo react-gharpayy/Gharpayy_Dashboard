@@ -193,8 +193,8 @@ export default function LeadsProgressPanelButton({
 
           {!isLoading && !isError && isMemberView && memberRow && (
             <div className="space-y-4">
-              <div className="rounded-xl border p-4 bg-card shadow-sm">
-                <div className="flex items-center justify-between gap-2 pb-3 border-b">
+              <div className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/70">
                   <div>
                     <p className="text-sm font-semibold">{memberRow.name}</p>
                     <p className="text-[10px] text-muted-foreground">Selected Date: {selectedDate}</p>
@@ -209,9 +209,10 @@ export default function LeadsProgressPanelButton({
                   <MetricTile label="Leads Added" value={memberRow.leadsAdded} max={goals.leadsAdded} accent="violet" />
                   <MetricTile label="Tours Scheduled" value={memberRow.toursScheduled} max={goals.toursScheduled} accent="emerald" />
                 </div>
-                <div className="mt-3 space-y-2">
-                  <ProgressLine label="Leads Added" value={memberRow.leadsAdded} max={goals.leadsAdded} />
-                  <ProgressLine label="Tours Scheduled" value={memberRow.toursScheduled} max={goals.toursScheduled} />
+                <div className="mt-3 rounded-xl border border-dashed border-border/80 bg-secondary/20 px-3 py-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    Daily target: <span className="font-medium text-foreground">{goals.leadsAdded}</span> leads and <span className="font-medium text-foreground">{goals.toursScheduled}</span> tours.
+                  </p>
                 </div>
               </div>
 
