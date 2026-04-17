@@ -30,6 +30,7 @@ import { T, QUALITY, GEO_TECH_PARKS, FDISPLAY } from '@/lib/leadGeoData';
 import { parseMoveInV2, parseBudgetV2 } from '@/lib/leadParserV2';
 import { LEADS_UPDATED_AT_KEY, getLeadsUpdatedStamp } from '@/lib/leadSync';
 import { ZonePill, BudgetChips, GeoIntelPanel } from '@/components/LeadUIAtoms';
+import PGCard from "@/components/PGCard";
 
 // ─── helpers to map DB lead → card display ────────────────────────
 function mapLeadMeta(lead: LeadWithRelations) {
@@ -1084,92 +1085,160 @@ const Leads = () => {
                   setExpandedId(lead.id);
                 }}
                 style={{
-                  background: isDuplicateLead ? 'rgba(251,113,133,0.045)' : 'var(--lc-bg1)',
-                  border: isDuplicateLead ? '1px solid rgba(251,113,133,0.28)' : '1px solid var(--lc-line)',
+                  background: isDuplicateLead ? "rgba(251,113,133,0.045)" : "var(--lc-bg1)",
+                  border: isDuplicateLead ? "1px solid rgba(251,113,133,0.28)" : "1px solid var(--lc-line)",
                   borderRadius: 12,
-                  padding: '12px 14px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  position: 'relative',
+                  padding: "12px 14px",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  position: "relative",
                 }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.borderColor = isDuplicateLead ? 'rgba(251,113,133,0.45)' : 'var(--lc-line2)';
-                  (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = isDuplicateLead
+                    ? "rgba(251,113,133,0.45)"
+                    : "var(--lc-line2)";
+                  (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)";
                 }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.borderColor = isDuplicateLead ? 'rgba(251,113,133,0.28)' : 'var(--lc-line)';
-                  (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderColor = isDuplicateLead
+                    ? "rgba(251,113,133,0.28)"
+                    : "var(--lc-line)";
+                  (e.currentTarget as HTMLElement).style.boxShadow = "none";
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                   {/* Checkbox */}
                   {canManageLeadAssignments && !isAssignedByMeReadOnly && (
-                    <div onClick={e => e.stopPropagation()} style={{ paddingTop: 6, flexShrink: 0 }}>
+                    <div onClick={(e) => e.stopPropagation()} style={{ paddingTop: 6, flexShrink: 0 }}>
                       <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleSelect(lead.id)} />
                     </div>
                   )}
 
                   {/* Avatar */}
-                  <div className="lc-avatar" style={{
-                    width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                    background: `hsl(${hue},30%,92%)`,
-                    border: `2px solid hsl(${hue},34%,84%)`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 14, fontWeight: 700, color: `hsl(${hue},38%,42%)`,
-                    fontFamily: 'var(--lc-sans)',
-                  }}>
-                    {(lead.name || '?')[0]?.toUpperCase()}
+                  <div
+                    className="lc-avatar"
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      background: `hsl(${hue},30%,92%)`,
+                      border: `2px solid hsl(${hue},34%,84%)`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: `hsl(${hue},38%,42%)`,
+                      fontFamily: "var(--lc-sans)",
+                    }}
+                  >
+                    {(lead.name || "?")[0]?.toUpperCase()}
                   </div>
 
                   {/* Lead Info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {/* Row 1: Name + Badges */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap', paddingBottom: 4 }}>
-                      <h3 className="lc-name" style={{ fontSize: 13, fontWeight: 700, color: 'var(--lc-hi)', margin: 0, fontFamily: 'var(--lc-sans)', paddingRight: 2 }}>{lead.name}</h3>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px 8px",
+                        flexWrap: "wrap",
+                        paddingBottom: 4,
+                      }}
+                    >
+                      <h3
+                        className="lc-name"
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "var(--lc-hi)",
+                          margin: 0,
+                          fontFamily: "var(--lc-sans)",
+                          paddingRight: 2,
+                        }}
+                      >
+                        {lead.name}
+                      </h3>
 
                       {m.need && (
                         <>
-                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <span className="lc-meta" style={{ fontSize: 10.5, color: 'var(--lc-mid)', fontWeight: 600 }}>{m.need}</span>
+                          <span style={{ color: "var(--lc-line2)" }}>|</span>
+                          <span
+                            className="lc-meta"
+                            style={{ fontSize: 10.5, color: "var(--lc-mid)", fontWeight: 600 }}
+                          >
+                            {m.need}
+                          </span>
                         </>
                       )}
 
                       {m.quality && (
                         <>
-                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <span className="lc-chip" style={{
-                            padding: '1px 8px', borderRadius: 10, fontSize: 9.5, fontWeight: 600,
-                            background: qualityBadge.bg, color: qualityBadge.color,
-                          }}>
+                          <span style={{ color: "var(--lc-line2)" }}>|</span>
+                          <span
+                            className="lc-chip"
+                            style={{
+                              padding: "1px 8px",
+                              borderRadius: 10,
+                              fontSize: 9.5,
+                              fontWeight: 600,
+                              background: qualityBadge.bg,
+                              color: qualityBadge.color,
+                            }}
+                          >
                             {m.quality.charAt(0).toUpperCase() + m.quality.slice(1)}
                           </span>
                         </>
                       )}
 
-                      {m.zones.length > 0 && <span style={{ color: 'var(--lc-line2)' }}>|</span>}
-                      {m.zones.map((z: string) => <ZonePill key={z} zoneName={z} xs />)}
+                      {m.zones.length > 0 && <span style={{ color: "var(--lc-line2)" }}>|</span>}
+                      {m.zones.map((z: string) => (
+                        <ZonePill key={z} zoneName={z} xs />
+                      ))}
 
-                      <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                      <span className="lc-stage" style={{
-                        padding: '1px 8px', borderRadius: 10, fontSize: 9.5, fontWeight: 600,
-                        background: sBadge.bg, color: sBadge.color, border: `1px solid ${sBadge.border}`,
-                      }}>
+                      <span style={{ color: "var(--lc-line2)" }}>|</span>
+                      <span
+                        className="lc-stage"
+                        style={{
+                          padding: "1px 8px",
+                          borderRadius: 10,
+                          fontSize: 9.5,
+                          fontWeight: 600,
+                          background: sBadge.bg,
+                          color: sBadge.color,
+                          border: `1px solid ${sBadge.border}`,
+                        }}
+                      >
                         {stageLabel}
                       </span>
                     </div>
 
                     {/* Row 2: Phone + Budget + Extended Info */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap' }}>
-                      <span className="lc-phone" style={{ fontSize: 11, color: 'var(--lc-mid)', fontFamily: 'var(--lc-mono)', fontWeight: 600 }}>{lead.phone}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px 8px", flexWrap: "wrap" }}>
+                      <span
+                        className="lc-phone"
+                        style={{ fontSize: 11, color: "var(--lc-mid)", fontFamily: "var(--lc-mono)", fontWeight: 600 }}
+                      >
+                        {lead.phone}
+                      </span>
 
                       {budgetDisplay && (
                         <>
-                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <span className="lc-chip" style={{
-                            fontSize: 10, padding: '1px 7px',
-                            background: 'var(--lc-bg2)', borderRadius: 4, color: 'var(--lc-mid)',
-                            fontFamily: 'var(--lc-mono)', fontWeight: 500,
-                          }}>
+                          <span style={{ color: "var(--lc-line2)" }}>|</span>
+                          <span
+                            className="lc-chip"
+                            style={{
+                              fontSize: 10,
+                              padding: "1px 7px",
+                              background: "var(--lc-bg2)",
+                              borderRadius: 4,
+                              color: "var(--lc-mid)",
+                              fontFamily: "var(--lc-mono)",
+                              fontWeight: 500,
+                            }}
+                          >
                             {budgetDisplay}
                           </span>
                         </>
@@ -1177,17 +1246,27 @@ const Leads = () => {
 
                       {m.inBLR !== null && (
                         <>
-                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <span className="lc-meta" style={{ fontSize: 10, color: m.inBLR ? 'var(--lc-mid)' : 'var(--lc-dim)', fontWeight: 500 }}>
-                            {m.inBLR ? 'IN BLR' : 'NOT IN BLR'}
+                          <span style={{ color: "var(--lc-line2)" }}>|</span>
+                          <span
+                            className="lc-meta"
+                            style={{
+                              fontSize: 10,
+                              color: m.inBLR ? "var(--lc-mid)" : "var(--lc-dim)",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {m.inBLR ? "IN BLR" : "NOT IN BLR"}
                           </span>
                         </>
                       )}
 
                       {lead.moveInDate && (
                         <>
-                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <span className="lc-meta" style={{ fontSize: 10, color: 'var(--lc-mid)', fontWeight: 500 }}>
+                          <span style={{ color: "var(--lc-line2)" }}>|</span>
+                          <span
+                            className="lc-meta"
+                            style={{ fontSize: 10, color: "var(--lc-mid)", fontWeight: 500 }}
+                          >
                             {lead.moveInDate}
                           </span>
                         </>
@@ -1195,72 +1274,130 @@ const Leads = () => {
 
                       {lead.preferredLocation && (
                         <>
-                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <span style={{ color: "var(--lc-line2)" }}>|</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
                             <MapPin size={9} color="var(--lc-dim)" />
-                            <span className="lc-meta" style={{ fontSize: 10, color: 'var(--lc-dim)', fontWeight: 500 }}>{lead.preferredLocation}</span>
+                            <span
+                              className="lc-meta"
+                              style={{ fontSize: 10, color: "var(--lc-dim)", fontWeight: 500 }}
+                            >
+                              {lead.preferredLocation}
+                            </span>
                           </div>
                         </>
                       )}
 
                       {fieldsMissing > 0 && (
                         <>
-                          <span style={{ color: 'var(--lc-line2)' }}>|</span>
-                          <div style={{
-                            display: 'inline-block',
-                            padding: '1px 6px', borderRadius: 4,
-                            background: 'rgba(239,68,68,0.08)', color: '#ef4444',
-                            fontSize: 9.5, fontWeight: 600,
-                          }}>
+                          <span style={{ color: "var(--lc-line2)" }}>|</span>
+                          <div
+                            style={{
+                              display: "inline-block",
+                              padding: "1px 6px",
+                              borderRadius: 4,
+                              background: "rgba(239,68,68,0.08)",
+                              color: "#ef4444",
+                              fontSize: 9.5,
+                              fontWeight: 600,
+                            }}
+                          >
                             {fieldsMissing} missing
                           </div>
                         </>
                       )}
                     </div>
+
                     {/* 🔥 Best PGs (Collapsed) */}
-                    <div style={{ marginTop: 6 }}>
-                      <div style={{ fontSize: 9, color: 'var(--lc-dim)', marginBottom: 2 }}>
+                    <div style={{ marginTop: 8 }}>
+                      <div
+                        style={{
+                          fontSize: 9,
+                          color: "var(--lc-dim)",
+                          marginBottom: 6,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.04em",
+                        }}
+                      >
                         Best PGs
                       </div>
 
                       {bestPGs.length === 0 ? (
-                        <div style={{ fontSize: 9, color: 'var(--lc-dim)' }}>
-                          No matches
-                        </div>
+                        <div style={{ fontSize: 9, color: "var(--lc-dim)" }}>No matches</div>
                       ) : (
-                        bestPGs.slice(0, 3).map((pg: any) => (
-                          <div
-                            key={pg.id}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              fontSize: 9,
-                              padding: '2px 6px',
-                              background: 'var(--lc-bg2)',
-                              borderRadius: 4,
-                              marginBottom: 2,
-                            }}
-                          >
-                            <span>{pg.name}</span>
-                            <span>{pg.score}</span>
-                          </div>
-                        ))
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 items-start">
+                          {bestPGs.slice(0, 3).map((pg: any) => (
+                            <div key={pg.id} onClick={(e) => e.stopPropagation()} className="min-w-0">
+                              <PGCard pg={pg} viewMode="grid" />
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
 
                   {/* Quick actions on collapsed */}
-                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, paddingTop: 2, alignItems: 'flex-end' }}>
-
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, width: '100%', flexWrap: 'wrap' }}>
-                      <div style={{ width: 40, height: 4, background: 'var(--lc-bg3)', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${progress}%`, background: progressColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      flexShrink: 0,
+                      paddingTop: 2,
+                      alignItems: "flex-end",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        gap: 4,
+                        width: "100%",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 40,
+                          height: 4,
+                          background: "var(--lc-bg3)",
+                          borderRadius: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${progress}%`,
+                            background: progressColor,
+                            borderRadius: 2,
+                            transition: "width 0.3s ease",
+                          }}
+                        />
                       </div>
-                      <span className="lc-progress-pct" style={{ fontSize: 8.5, fontWeight: 700, color: progressColor, fontFamily: 'var(--lc-mono)', textAlign: 'right', minWidth: 18 }}>{progress}%</span>
+                      <span
+                        className="lc-progress-pct"
+                        style={{
+                          fontSize: 8.5,
+                          fontWeight: 700,
+                          color: progressColor,
+                          fontFamily: "var(--lc-mono)",
+                          textAlign: "right",
+                          minWidth: 18,
+                        }}
+                      >
+                        {progress}%
+                      </span>
+
                       {!isAssignedByMeReadOnly && (
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); openScheduleFromLead(lead, m.zone || ''); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openScheduleFromLead(lead, m.zone || "");
+                          }}
                           className="inline-flex items-center gap-1 rounded-md border border-[var(--lc-line)] bg-[var(--lc-bg2)] px-1.5 py-0.5 text-[8.5px] font-semibold text-[var(--lc-mid)] hover:bg-[var(--lc-bg3)]"
                           title="Tour"
                         >
@@ -1268,36 +1405,96 @@ const Leads = () => {
                           Tour
                         </button>
                       )}
-                      <a href={`tel:${lead.phone}`} style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex' }} title="Call">
+
+                      <a
+                        href={`tel:${lead.phone}`}
+                        style={{
+                          padding: 4,
+                          borderRadius: 5,
+                          background: "var(--lc-bg2)",
+                          border: "1px solid var(--lc-line)",
+                          display: "flex",
+                        }}
+                        title="Call"
+                      >
                         <PhoneCall size={10} color="var(--lc-mid)" />
                       </a>
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           if (isAssignedByMeReadOnly) return;
                           setExpandedId(lead.id);
                         }}
-                        style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }}
+                        style={{
+                          padding: 4,
+                          borderRadius: 5,
+                          background: "var(--lc-bg2)",
+                          border: "1px solid var(--lc-line)",
+                          display: "flex",
+                          cursor: "pointer",
+                        }}
                         title="Expand"
                       >
                         <ChevronDown size={10} color="var(--lc-mid)" />
                       </button>
                     </div>
 
-                    <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
-                      <span className="lc-timestamp" style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--lc-dim)', fontFamily: 'var(--lc-mono)', whiteSpace: 'nowrap' }}>
+                    <div
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        alignItems: "center",
+                        gap: 4,
+                        flexWrap: "nowrap",
+                      }}
+                    >
+                      <span
+                        className="lc-timestamp"
+                        style={{
+                          fontSize: 8.5,
+                          fontWeight: 600,
+                          color: "var(--lc-dim)",
+                          fontFamily: "var(--lc-mono)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {createdAtStamp}
                       </span>
+
                       <button
-                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`); toast.success('WhatsApp link copied!'); }}
-                        style={{ padding: 4, borderRadius: 5, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', display: 'flex', cursor: 'pointer' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`);
+                          toast.success("WhatsApp link copied!");
+                        }}
+                        style={{
+                          padding: 4,
+                          borderRadius: 5,
+                          background: "rgba(34,197,94,0.08)",
+                          border: "1px solid rgba(34,197,94,0.25)",
+                          display: "flex",
+                          cursor: "pointer",
+                        }}
                         title="Copy WhatsApp API"
                       >
                         <MessageCircle size={10} color="#22c55e" />
                       </button>
+
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button style={{ padding: 4, borderRadius: 5, background: 'var(--lc-bg2)', border: '1px solid var(--lc-line)', display: 'flex', cursor: 'pointer' }} title="More options">
+                          <button
+                            style={{
+                              padding: 4,
+                              borderRadius: 5,
+                              background: "var(--lc-bg2)",
+                              border: "1px solid var(--lc-line)",
+                              display: "flex",
+                              cursor: "pointer",
+                            }}
+                            title="More options"
+                          >
                             <MoreVertical size={10} color="var(--lc-mid)" />
                           </button>
                         </DropdownMenuTrigger>
@@ -1311,7 +1508,7 @@ const Leads = () => {
                             className="font-mono text-[10px] text-muted-foreground cursor-pointer"
                             onSelect={() => {
                               navigator.clipboard.writeText(`L-${lead.id.slice(-6).toUpperCase()}`);
-                              toast.success('Lead ID copied!');
+                              toast.success("Lead ID copied!");
                             }}
                           >
                             L-{lead.id.slice(-6).toUpperCase()}
@@ -1324,7 +1521,6 @@ const Leads = () => {
               </div>
             );
           }
-
           // ─── EXPANDED CARD ───
           const currentStageIndex = pipelineStages.findIndex((s: any) => s.key === lead.status);
           const stageIdx = currentStageIndex !== -1 ? currentStageIndex : 0;
@@ -1477,7 +1673,16 @@ const Leads = () => {
 
                       {/* ✅ FIX 4+5+6: Fixed expanded PG block — uses [...bestPGs, ...morePGs].length check */}
                       <div style={{ marginTop: 8 }}>
-                        <div style={{ fontSize: 10, color: 'var(--lc-mid)', marginBottom: 4 }}>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            color: "var(--lc-mid)",
+                            marginBottom: 6,
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
                           Best PG Matches
                         </div>
 
@@ -1486,43 +1691,13 @@ const Leads = () => {
                             No matches found
                           </div>
                         ) : (
-                          [...bestPGs, ...morePGs].map((pg: any, index: number) => {
-                            let label = 'Other';
-                            let color = '#6b7280';
-
-                            if (index < 3) {
-                              label = 'Best';
-                              color = '#22c55e';
-                            } else if (index < 6) {
-                              label = 'Good';
-                              color = '#eab308';
-                            }
-
-                            return (
-                              <div
-                                key={pg.id}
-                                style={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  fontSize: 10,
-                                  padding: '4px 8px',
-                                  background: index === 0 ? 'rgba(34,197,94,0.12)' : 'var(--lc-bg2)',
-                                  border: index === 0 ? '1px solid #22c55e' : '1px solid transparent',
-                                  borderRadius: 6,
-                                  marginBottom: 3,
-                                }}
-                              >
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <span style={{ fontWeight: index === 0 ? 700 : 500 }}>
-                                    {pg.name} · {pg.area}
-                                  </span>
-                                  <span style={{ fontSize: 8, color }}>{label}</span>
-                                </div>
-                                <span style={{ fontWeight: 600 }}>{pg.score}</span>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 items-start">
+                            {[...bestPGs, ...morePGs].slice(0, 6).map((pg: any) => (
+                              <div key={pg.id} onClick={(e) => e.stopPropagation()} className="min-w-0">
+                                <PGCard pg={pg} viewMode="grid" />
                               </div>
-                            );
-                          })
+                            ))}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1850,7 +2025,7 @@ const Leads = () => {
               ) : null}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 items-start">
               <div className="space-y-1.5">
                 <Label className="text-xs">Lead</Label>
                 <Input value={scheduleLeadName} readOnly className="h-8 text-xs bg-muted/40" />
