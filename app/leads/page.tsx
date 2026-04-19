@@ -31,6 +31,7 @@ import { parseMoveInV2, parseBudgetV2 } from '@/lib/leadParserV2';
 import { LEADS_UPDATED_AT_KEY, getLeadsUpdatedStamp } from '@/lib/leadSync';
 import { ZonePill, BudgetChips, GeoIntelPanel } from '@/components/LeadUIAtoms';
 import PGCard from "@/components/PGCard";
+import { ScheduleTourForm } from '@/components/tours/ScheduleTourForm';
 import LogActivitySheet from '@/components/LogActivitySheet';
 import LeadsProgressPanelButton from '@/components/LeadsProgressPanelButton';
 import MemberDailyReminderPopup from '@/components/MemberDailyReminderPopup';
@@ -156,19 +157,7 @@ const Leads = () => {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleLeadId, setScheduleLeadId] = useState('');
-  const [scheduleLeadName, setScheduleLeadName] = useState('');
-  const [schedulePhone, setSchedulePhone] = useState('');
-  const [schedulePropertyName, setSchedulePropertyName] = useState('');
-  const [scheduleZoneId, setScheduleZoneId] = useState('');
-  const [schedulePendingZoneName, setSchedulePendingZoneName] = useState('');
-  const [scheduleTourDate, setScheduleTourDate] = useState(new Date().toISOString().split('T')[0]);
-  const [scheduleTourTime, setScheduleTourTime] = useState('11:00');
-  const [scheduleTourMode, setScheduleTourMode] = useState<'physical' | 'virtual'>('physical');
-  const [scheduleAssignedTo, setScheduleAssignedTo] = useState('');
-  const [scheduleAssignedSearch, setScheduleAssignedSearch] = useState('');
-  const [showAssignedOptions, setShowAssignedOptions] = useState(false);
-  const [scheduleBudget, setScheduleBudget] = useState('12000');
-  const [scheduleRemarks, setScheduleRemarks] = useState('');
+  const [scheduleLead, setScheduleLead] = useState<{ id?: string; name?: string; phone?: string; budget?: string; preferredLocation?: string; occupation?: string; source?: string } | null>(null);
   const [existingTourInfo, setExistingTourInfo] = useState<null | {
     leadName: string;
     propertyName: string;
@@ -356,23 +345,6 @@ const Leads = () => {
     setExpandedId(null);
     setSelectedIds(new Set());
   }, [isAssignedByMeReadOnly]);
-
-  useEffect(() => {
-    if (!scheduleAssignedTo) return;
-    const selected = (members || []).find((m: any) => String(m.id || m._id || '') === scheduleAssignedTo) as any;
-    if (selected) {
-      setScheduleAssignedSearch(String(selected.name || selected.fullName || ''));
-    }
-  }, [scheduleAssignedTo, members]);
-
-  useEffect(() => {
-    if (!schedulePendingZoneName || !officeZones || officeZones.length === 0) return;
-    const zone = officeZones.find((z: any) => String(z.name || '').toLowerCase() === schedulePendingZoneName.toLowerCase());
-    if (zone) {
-      setScheduleZoneId(String(zone._id || zone.id || ''));
-      setSchedulePendingZoneName('');
-    }
-  }, [schedulePendingZoneName, officeZones]);
 
   const filtered = (leads || [])
     .filter(l => {
@@ -679,7 +651,7 @@ const Leads = () => {
       const scheduledAt = new Date(String(existingVisit?.scheduledAt || existingVisit?.scheduled_at || ''));
       setExistingTourInfo({
         leadName: lead.name || 'Lead',
-        propertyName: String(existingVisit?.properties?.name || extractMeta(notes, 'typed_property') || schedulePropertyName || 'Property'),
+        propertyName: String(existingVisit?.properties?.name || extractMeta(notes, 'typed_property') || 'Property'),
         assignedTo: String(existingVisit?.members?.fullName || existingVisit?.members?.name || extractMeta(notes, 'assigned_to') || 'Assigned member'),
         tourTime: Number.isNaN(scheduledAt.getTime())
           ? 'Scheduled'
@@ -699,98 +671,16 @@ const Leads = () => {
 
     setExistingTourInfo(null);
     setScheduleLeadId(lead.id);
-    setScheduleLeadName(lead.name || '');
-    setSchedulePhone(lead.phone || '');
-    setSchedulePropertyName('');
-    setScheduleTourDate(new Date().toISOString().split('T')[0]);
-    setScheduleTourTime('11:00');
-    setScheduleTourMode('physical');
-    setScheduleAssignedTo('');
-    setScheduleAssignedSearch('');
-    setShowAssignedOptions(false);
-    setScheduleBudget('12000');
-    setScheduleRemarks('');
-
-    const matchedZone = (officeZones || []).find((z: any) => String(z.name || '').toLowerCase() === String(zoneName || '').toLowerCase());
-    if (matchedZone) {
-      setScheduleZoneId(String(matchedZone._id || matchedZone.id || ''));
-      setSchedulePendingZoneName('');
-    } else {
-      setScheduleZoneId(String((officeZones || [])[0]?._id || (officeZones || [])[0]?.id || ''));
-      setSchedulePendingZoneName(String(zoneName || ''));
-    }
-
+    setScheduleLead({
+      id: lead.id,
+      name: lead.name || '',
+      phone: lead.phone || '',
+      budget: lead.budget || '',
+      preferredLocation: lead.preferredLocation || '',
+      occupation: lead.profession || '',
+      source: lead.source || '',
+    });
     setScheduleOpen(true);
-  };
-
-  const handleScheduleTourFromLead = async () => {
-    if (!scheduleLeadId || !schedulePropertyName.trim() || !scheduleZoneId || !scheduleTourDate || !scheduleTourTime || !scheduleAssignedTo) {
-      toast.error('Please fill all required fields');
-      return;
-    }
-
-    const assignedMember = (members || []).find((m: any) => String(m.id || m._id || '') === scheduleAssignedTo) as any;
-    const zone = (officeZones || []).find((z: any) => String(z._id || z.id || '') === scheduleZoneId) as any;
-    if (!assignedMember || !zone) {
-      toast.error('Invalid zone or assigned TCM member');
-      return;
-    }
-
-    const selectedLeadAny = (leads || []).find((l: any) => String(l.id || l._id) === scheduleLeadId) as any;
-    const fallbackPropertyId =
-      String((properties || [])[0]?.id || (properties || [])[0]?._id || '') ||
-      String(selectedLeadAny?.properties?.id || selectedLeadAny?.properties?._id || '') ||
-      String(selectedLeadAny?.propertyId || '') ||
-      objectIdLike();
-
-    try {
-      const scheduledAt = new Date(`${scheduleTourDate}T${scheduleTourTime}:00`);
-      await createVisit.mutateAsync({
-        leadId: scheduleLeadId,
-        propertyId: fallbackPropertyId,
-        assignedStaffId: String(assignedMember.id || assignedMember._id || ''),
-        scheduledAt: scheduledAt.toISOString(),
-        lead_id: scheduleLeadId,
-        property_id: fallbackPropertyId,
-        assigned_staff_id: String(assignedMember.id || assignedMember._id || ''),
-        scheduled_at: scheduledAt.toISOString(),
-        scheduleRemarks: scheduleRemarks.trim() || null,
-        notes: `tour_mode:${scheduleTourMode}; zone:${zone.name}; budget:${Number(scheduleBudget) || 0}; scheduled_by:${user?.fullName || user?.username || 'system'}; scheduled_by_id:${String(user?.id || '')}; assigned_to:${assignedMember.name || assignedMember.fullName || ''}; assigned_to_id:${String(assignedMember.id || assignedMember._id || '')}; typed_property:${schedulePropertyName.trim()}; tour_remarks:${encodeURIComponent(scheduleRemarks.trim())}`,
-        phone: schedulePhone,
-      });
-
-      toast.success('Tour scheduled successfully');
-      setScheduleOpen(false);
-      setExistingTourInfo(null);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to schedule tour');
-    }
-  };
-
-  const memberOptions = (members || [])
-    .map((member: any) => ({
-      id: String(member.id || member._id || ''),
-      name: String(member.name || member.fullName || '').trim(),
-    }))
-    .filter((member: { id: string; name: string }) => member.id && member.name);
-
-  const filteredMemberOptions = (() => {
-    const q = scheduleAssignedSearch.trim().toLowerCase();
-    if (!q) return memberOptions.slice(0, 12);
-    return memberOptions.filter((member) => member.name.toLowerCase().includes(q)).slice(0, 20);
-  })();
-
-  const handleAssignedSearchChange = (nextValue: string) => {
-    setScheduleAssignedSearch(nextValue);
-    const matched = memberOptions.find((member) => member.name.toLowerCase() === nextValue.trim().toLowerCase());
-    setScheduleAssignedTo(matched?.id || '');
-    setShowAssignedOptions(true);
-  };
-
-  const handleAssignedSelect = (member: { id: string; name: string }) => {
-    setScheduleAssignedTo(member.id);
-    setScheduleAssignedSearch(member.name);
-    setShowAssignedOptions(false);
   };
 
   const changePage = (nextPage: number) => {
@@ -2247,133 +2137,47 @@ const Leads = () => {
         open={scheduleOpen}
         onOpenChange={(nextOpen) => {
           setScheduleOpen(nextOpen);
-          if (!nextOpen) setExistingTourInfo(null);
+          if (!nextOpen) {
+            setExistingTourInfo(null);
+            setScheduleLead(null);
+          }
         }}
       >
-        <DialogContent className="sm:max-w-[560px]">
+        <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Schedule Tour</DialogTitle>
             <DialogDescription>
               {existingTourInfo
                 ? 'A tour is already scheduled for this lead.'
-                : 'Create a tour assignment without leaving Leads.'}
+                : `Scheduling for ${scheduleLead?.name || 'lead'}`}
             </DialogDescription>
           </DialogHeader>
 
           {existingTourInfo ? (
-            <div className="space-y-2 rounded-lg border border-border bg-secondary/25 p-3">
-              <p className="text-xs"><span className="font-semibold">Lead:</span> {existingTourInfo.leadName}</p>
-              <p className="text-xs"><span className="font-semibold">Property:</span> {existingTourInfo.propertyName}</p>
-              <p className="text-xs"><span className="font-semibold">Assigned To:</span> {existingTourInfo.assignedTo}</p>
-              <p className="text-xs"><span className="font-semibold">Tour Time:</span> {existingTourInfo.tourTime}</p>
-              <p className="text-xs"><span className="font-semibold">Tour Mode:</span> {existingTourInfo.tourMode}</p>
-              {existingTourInfo.remarks ? (
-                <p className="text-xs"><span className="font-semibold">Remarks:</span> {existingTourInfo.remarks}</p>
-              ) : null}
-            </div>
+            <>
+              <div className="space-y-2 rounded-lg border border-border bg-secondary/25 p-3">
+                <p className="text-xs"><span className="font-semibold">Lead:</span> {existingTourInfo.leadName}</p>
+                <p className="text-xs"><span className="font-semibold">Property:</span> {existingTourInfo.propertyName}</p>
+                <p className="text-xs"><span className="font-semibold">Assigned To:</span> {existingTourInfo.assignedTo}</p>
+                <p className="text-xs"><span className="font-semibold">Tour Time:</span> {existingTourInfo.tourTime}</p>
+                <p className="text-xs"><span className="font-semibold">Tour Mode:</span> {existingTourInfo.tourMode}</p>
+                {existingTourInfo.remarks ? (
+                  <p className="text-xs"><span className="font-semibold">Remarks:</span> {existingTourInfo.remarks}</p>
+                ) : null}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setScheduleOpen(false)}>Close</Button>
+              </DialogFooter>
+            </>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Lead</Label>
-                <Input value={scheduleLeadName} readOnly className="h-8 text-xs bg-muted/40" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Phone Number</Label>
-                <Input
-                  value={schedulePhone}
-                  onChange={(e) => setSchedulePhone(e.target.value)}
-                  placeholder="Enter phone number"
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label className="text-xs">Property</Label>
-                <Input
-                  value={schedulePropertyName}
-                  onChange={(e) => setSchedulePropertyName(e.target.value)}
-                  placeholder="Type property name"
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Zone</Label>
-                <select
-                  value={scheduleZoneId}
-                  onChange={(e) => setScheduleZoneId(e.target.value)}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-                >
-                  {(officeZones || []).map((zone: any) => (
-                    <option key={String(zone._id || zone.id)} value={String(zone._id || zone.id)}>{String(zone.name || '')}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Assign To (TCM)</Label>
-                <div className="relative">
-                  <Input
-                    value={scheduleAssignedSearch}
-                    onChange={(e) => handleAssignedSearchChange(e.target.value)}
-                    onFocus={() => setShowAssignedOptions(true)}
-                    onBlur={() => setTimeout(() => setShowAssignedOptions(false), 120)}
-                    placeholder="Type member name..."
-                    className="h-8 text-xs"
-                  />
-                  {showAssignedOptions && filteredMemberOptions.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full mt-1 z-50 max-h-44 overflow-auto rounded-md border border-border bg-popover p-1 shadow-md">
-                      {filteredMemberOptions.map((member) => (
-                        <button
-                          key={member.id}
-                          type="button"
-                          className="w-full rounded-sm px-2 py-1.5 text-left text-xs text-popover-foreground hover:bg-accent/20"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleAssignedSelect(member)}
-                        >
-                          {member.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Tour Date</Label>
-                <Input type="date" value={scheduleTourDate} onChange={(e) => setScheduleTourDate(e.target.value)} className="h-8 text-xs" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Tour Time</Label>
-                <Input type="time" value={scheduleTourTime} onChange={(e) => setScheduleTourTime(e.target.value)} className="h-8 text-xs" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Tour Mode</Label>
-                <select value={scheduleTourMode} onChange={(e) => setScheduleTourMode(e.target.value as 'physical' | 'virtual')} className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs">
-                  <option value="physical">Physical</option>
-                  <option value="virtual">Virtual</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Budget</Label>
-                <Input type="number" value={scheduleBudget} onChange={(e) => setScheduleBudget(e.target.value)} className="h-8 text-xs" />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label className="text-xs">Remarks</Label>
-                <Input
-                  value={scheduleRemarks}
-                  onChange={(e) => setScheduleRemarks(e.target.value)}
-                  placeholder="Any context for assigned person"
-                  className="h-8 text-xs"
-                />
-              </div>
-            </div>
+            <ScheduleTourForm
+              selectedLead={scheduleLead}
+              onScheduled={() => {
+                setScheduleOpen(false);
+                setScheduleLead(null);
+              }}
+            />
           )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setScheduleOpen(false)}>Cancel</Button>
-            {!existingTourInfo ? (
-              <Button onClick={handleScheduleTourFromLead} disabled={createVisit.isPending}>
-                {createVisit.isPending ? 'Scheduling...' : 'Schedule'}
-              </Button>
-            ) : null}
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </AppLayout>
