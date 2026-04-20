@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useEffect, type ReactNode } from 'react';
+import { useState, useCallback, useEffect, type ReactNode, type ClipboardEvent } from 'react';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
@@ -196,6 +196,31 @@ const AddLeadDialog = ({ trigger, open: controlledOpen, onOpenChange, editingLea
   const [showMatcher, setShowMatcher] = useState(false);
   const [assignedMemberId, setAssignedAgentId] = useState(user?.role === 'member' ? user.id : 'unassigned');
   const [leadStage, setLeadStage] = useState('new');
+
+  const persistPastedLeadText = useCallback(async (text: string) => {
+    const rawText = String(text || '');
+    if (!rawText.trim()) return;
+
+    try {
+      await fetch('/api/leads/paste-captures', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rawText,
+          source: 'add_lead_dialog_paste_form',
+          page: '/leads',
+        }),
+      });
+    } catch {
+      // Best-effort logging only; intake should continue even if this fails.
+    }
+  }, []);
+
+  const onRawTextPaste = useCallback((event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedText = event.clipboardData.getData('text');
+    if (!pastedText) return;
+    void persistPastedLeadText(pastedText);
+  }, [persistPastedLeadText]);
 
   useEffect(() => {
     if (user?.role === 'member' && assignedMemberId === 'unassigned') {
@@ -436,7 +461,7 @@ const AddLeadDialog = ({ trigger, open: controlledOpen, onOpenChange, editingLea
                 {!isEditMode && (
                   <>
                     <div style={{ fontSize: 9.5, color: T.dim, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.09em" }}>Paste Form</div>
-                    <textarea value={rawText} onChange={e => onTextChange(e.target.value)}
+                    <textarea value={rawText} onChange={e => onTextChange(e.target.value)} onPaste={onRawTextPaste}
                       placeholder={"Paste any WhatsApp / Gharpayy lead form…\nAll formats detected automatically."}
                       style={{ width: "100%", minHeight: 160, maxHeight: 400, background: T.bg1, border: `1px solid ${rawText ? T.line2 : T.line}`, borderRadius: 9, padding: "10px 12px", fontFamily: T.mono, fontSize: 11, color: T.text, resize: "vertical" as const, lineHeight: 1.7, outline: "none" }} />
                   </>
