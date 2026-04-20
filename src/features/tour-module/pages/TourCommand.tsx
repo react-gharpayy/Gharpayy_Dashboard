@@ -8,12 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { fetchTourById, type SupabaseTour, updateTourById } from "@/features/tour-module/lib/supabase-tours";
+import { fetchTourById, type TourRecord, updateTourById } from "@/features/tour-module/lib/tours-api";
 
 export default function TourCommand() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
-  const [tour, setTour] = useState<SupabaseTour | null>(null);
+  const [tour, setTour] = useState<TourRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState("scheduled");

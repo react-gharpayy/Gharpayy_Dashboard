@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 import { StatusBadge, OutcomeBadge } from "@/features/tour-module/components/StatusBadge";
-import { fetchTours, type SupabaseTour } from "@/features/tour-module/lib/supabase-tours";
+import { fetchTours, type TourRecord } from "@/features/tour-module/lib/tours-api";
 
 export default function AllTours() {
-  const [tours, setTours] = useState<SupabaseTour[]>([]);
+  const [tours, setTours] = useState<TourRecord[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [outcomeFilter, setOutcomeFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);

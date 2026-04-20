@@ -15,9 +15,9 @@ import { cn } from "@/lib/utils";
 import {
   createTour,
   fetchTours,
-  type NewSupabaseTour,
-  type SupabaseTour,
-} from "@/features/tour-module/lib/supabase-tours";
+  type NewTourRecord,
+  type TourRecord,
+} from "@/features/tour-module/lib/tours-api";
 import type { BookingSource, DecisionMaker, TourQualification, TourType, WillBookToday } from "@/features/tour-module/lib/types";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
@@ -32,7 +32,7 @@ const roomTypes = ["Single", "Double Sharing", "Triple Sharing", "Studio"];
 export default function ScheduleTour() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [existingTours, setExistingTours] = useState<SupabaseTour[]>([]);
+  const [existingTours, setExistingTours] = useState<TourRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +125,7 @@ export default function ScheduleTour() {
   const handleSubmit = async () => {
     if (!canSubmit || !effectiveTcm) return;
     const zone = zones.find((z) => z.id === form.zoneId);
-    const payload: NewSupabaseTour = {
+    const payload: NewTourRecord = {
       name: form.leadName,
       phone: form.phone,
       property: form.propertyName,

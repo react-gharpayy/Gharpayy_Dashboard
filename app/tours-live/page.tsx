@@ -6,50 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-
-type TourRow = {
-  id: string;
-  name: string | null;
-  phone: string | null;
-  property: string | null;
-  area: string | null;
-  date: string | null;
-  time: string | null;
-  status: string | null;
-  source: string | null;
-  tcm_name: string | null;
-  show_up: boolean | null;
-  outcome: string | null;
-  remarks: string | null;
-  score: number | null;
-  intent: string | null;
-  budget: number | null;
-  move_in_date: string | null;
-  tour_type: string | null;
-  zone: string | null;
-  work_college: string | null;
-  work_location: string | null;
-  decision_maker: string | null;
-  ready_48h: boolean | null;
-  exploring: boolean | null;
-  comparing: boolean | null;
-  needs_family: boolean | null;
-  key_concern: string | null;
-  slot: string | null;
-  live_score: number | null;
-  created_at: string | null;
-};
-
-type TourEventFallbackRow = {
-  tour_id: string;
-  occurred_at: string;
-  metadata: {
-    snapshot?: Partial<TourRow>;
-    tour?: any;
-  } | null;
-};
-
-const SYNC_NOTE = "TOUR_SYNC";
+import { fetchTours, type TourRecord } from "@/features/tour-module/lib/tours-api";
 
 function getTodayIstYmd() {
   const d = new Date();
@@ -71,10 +28,8 @@ function normalizeYmd(value: string | null | undefined): string | null {
   if (!value) return null;
   const v = String(value).trim();
 
-  // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
 
-  // DD-MM-YYYY -> YYYY-MM-DD
   const dmy = v.match(/^(\d{2})-(\d{2})-(\d{4})$/);
   if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
 
@@ -90,153 +45,15 @@ function normalizeYmd(value: string | null | undefined): string | null {
 }
 
 export default function ToursLivePage() {
-  const [rows, setRows] = useState<TourRow[]>([]);
+  const [rows, setRows] = useState<TourRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
-  const tourToRow = (tour: any, createdAt?: string): TourRow => ({
-    id: tour?.id ?? "",
-    name: tour?.leadName ?? null,
-    phone: tour?.phone ?? null,
-    property: tour?.propertyName ?? null,
-    area: tour?.area ?? null,
-    date: tour?.tourDate ?? null,
-    time: tour?.tourTime ?? null,
-    status: tour?.status ?? null,
-    source: tour?.bookingSource ?? null,
-    tcm_name: tour?.assignedToName ?? null,
-    show_up: tour?.showUp ?? null,
-    outcome: tour?.outcome ?? null,
-    remarks: tour?.remarks ?? null,
-    score: tour?.confidenceScore ?? null,
-    intent: tour?.intent ?? null,
-    budget: tour?.budget ?? null,
-    move_in_date: tour?.qualification?.moveInDate ?? null,
-    tour_type: tour?.tourType ?? null,
-    zone: tour?.zoneId ?? null,
-    work_college: tour?.qualification?.occupation ?? null,
-    work_location: tour?.qualification?.workLocation ?? null,
-    decision_maker: tour?.qualification?.decisionMaker ?? null,
-    ready_48h: !!tour?.qualification?.readyIn48h,
-    exploring: !!tour?.qualification?.exploring,
-    comparing: !!tour?.qualification?.comparing,
-    needs_family: !!tour?.qualification?.needsFamily,
-    key_concern: tour?.qualification?.keyConcern ?? null,
-    slot: tour?.tourTime ?? null,
-    live_score: tour?.confidenceScore ?? null,
-    created_at: createdAt ?? null,
-  });
-
-  const fetchFromEventsFallback = async (base: string, anon: string): Promise<TourRow[]> => {
-    const fallbackRes = await fetch(
-      `${base}/rest/v1/tour_events?select=tour_id,occurred_at,metadata&notes=eq.${SYNC_NOTE}&order=occurred_at.desc`,
-      {
-        headers: {
-          apikey: anon,
-          Authorization: `Bearer ${anon}`,
-        },
-        cache: "no-store",
-      }
-    );
-    if (!fallbackRes.ok) {
-      const detail = await fallbackRes.text();
-      throw new Error(`Fallback fetch failed: ${fallbackRes.status} ${detail}`);
-    }
-
-    const events = (await fallbackRes.json()) as TourEventFallbackRow[];
-    const dedup = new Map<string, TourRow>();
-
-    for (const e of events || []) {
-      const snapshot = e?.metadata?.snapshot;
-      if (snapshot?.id && !dedup.has(snapshot.id)) {
-        dedup.set(snapshot.id, {
-          ...({
-            id: "",
-            name: null,
-            phone: null,
-            property: null,
-            area: null,
-            date: null,
-            time: null,
-            status: null,
-            source: null,
-            tcm_name: null,
-            show_up: null,
-            outcome: null,
-            remarks: null,
-            score: null,
-            intent: null,
-            budget: null,
-            move_in_date: null,
-            tour_type: null,
-            zone: null,
-            work_college: null,
-            work_location: null,
-            decision_maker: null,
-            ready_48h: null,
-            exploring: null,
-            comparing: null,
-            needs_family: null,
-            key_concern: null,
-            slot: null,
-            live_score: null,
-            created_at: null,
-          } as TourRow),
-          ...snapshot,
-          created_at: snapshot.created_at ?? e.occurred_at,
-        });
-      }
-
-      if (!snapshot?.id && e?.metadata?.tour) {
-        const mapped = tourToRow(e.metadata.tour, e.occurred_at);
-        if (mapped.id && !dedup.has(mapped.id)) dedup.set(mapped.id, mapped);
-      }
-    }
-
-    return Array.from(dedup.values());
-  };
-
   const fetchRows = async () => {
-    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!base || !anon) {
-      setError("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
-      return;
-    }
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(
-        `${base}/rest/v1/tours?select=*&order=created_at.desc`,
-        {
-          headers: {
-            apikey: anon,
-            Authorization: `Bearer ${anon}`,
-          },
-          cache: "no-store",
-        }
-      );
-      if (!res.ok) {
-        const detail = await res.text();
-        let parsed: any = null;
-        try {
-          parsed = JSON.parse(detail);
-        } catch {}
-
-        const tableMissing =
-          res.status === 404 &&
-          (parsed?.code === "PGRST205" ||
-            String(parsed?.message || "").includes("public.tours"));
-
-        if (tableMissing) {
-          const fallbackRows = await fetchFromEventsFallback(base, anon);
-          setRows(fallbackRows);
-          return;
-        }
-
-        throw new Error(`Supabase fetch failed: ${res.status} ${detail}`);
-      }
-      const data = (await res.json()) as TourRow[];
+      const data = await fetchTours();
       setRows(data || []);
     } catch (e: any) {
       setError(e?.message || "Failed to fetch tours");
@@ -258,9 +75,9 @@ export default function ToursLivePage() {
   const latestDateMeta = useMemo(() => {
     const dated = rows
       .map((r) => ({ row: r, ymd: normalizeYmd(r.date) }))
-      .filter((x): x is { row: TourRow; ymd: string } => !!x.ymd);
+      .filter((x): x is { row: TourRecord; ymd: string } => !!x.ymd);
 
-    if (!dated.length) return { latestDate: null as string | null, rows: [] as TourRow[] };
+    if (!dated.length) return { latestDate: null as string | null, rows: [] as TourRecord[] };
 
     const latestDate = dated.reduce((max, cur) => (cur.ymd > max ? cur.ymd : max), dated[0].ymd);
     return {
@@ -274,7 +91,7 @@ export default function ToursLivePage() {
   return (
     <AppLayout
       title="Tours Live"
-      subtitle="Live shared Supabase tour feed (HR + Flow Ops + TCM)"
+      subtitle="Live shared MongoDB tour feed (HR + Flow Ops + TCM)"
       actions={
         <Button size="sm" variant="outline" onClick={fetchRows} disabled={loading}>
           <RefreshCw size={14} className={loading ? "animate-spin mr-1" : "mr-1"} />
@@ -375,7 +192,7 @@ export default function ToursLivePage() {
                       <td className="px-3 py-2">{r.phone || "-"}</td>
                       <td className="px-3 py-2">{r.source || "-"}</td>
                       <td className="px-3 py-2">{r.move_in_date || "-"}</td>
-                      <td className="px-3 py-2">{r.budget ? `₹${Number(r.budget).toLocaleString()}` : "-"}</td>
+                      <td className="px-3 py-2">{r.budget ? `Rs${Number(r.budget).toLocaleString()}` : "-"}</td>
                       <td className="px-3 py-2">{r.work_college || "-"}</td>
                       <td className="px-3 py-2">{r.work_location || "-"}</td>
                       <td className="px-3 py-2">{r.decision_maker || "-"}</td>
@@ -428,7 +245,7 @@ export default function ToursLivePage() {
                       <td className="px-3 py-2">{r.time || "-"}</td>
                       <td className="px-3 py-2">{r.property || "-"}</td>
                       <td className="px-3 py-2">{r.area || "-"}</td>
-                      <td className="px-3 py-2">{r.budget ? `₹${Number(r.budget).toLocaleString()}` : "-"}</td>
+                      <td className="px-3 py-2">{r.budget ? `Rs${Number(r.budget).toLocaleString()}` : "-"}</td>
                       <td className="px-3 py-2">{r.outcome || "-"}</td>
                       <td className="px-3 py-2">{r.remarks || "-"}</td>
                     </tr>

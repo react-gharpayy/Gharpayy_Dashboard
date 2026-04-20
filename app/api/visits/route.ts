@@ -3,11 +3,15 @@ import connectToDatabase from '@/lib/mongodb';
 import Visit from '@/models/Visit';
 import Lead from '@/models/Lead';
 import Property from '@/models/Property';
-import Member from '@/models/User';
+import Member from '@/models/Member';
 
 export async function GET() {
   try {
     await connectToDatabase();
+    // Ensure mongoose models referenced by Visit.populate refs are registered.
+    void Lead;
+    void Property;
+    void Member;
     
     const visits = await Visit.find({})
       .populate('leadId')

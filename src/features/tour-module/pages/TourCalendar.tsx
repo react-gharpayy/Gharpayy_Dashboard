@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Building2, Briefcase, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fetchTours, type SupabaseTour } from "@/features/tour-module/lib/supabase-tours";
+import { fetchTours, type TourRecord } from "@/features/tour-module/lib/tours-api";
 
 const HOURS = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
 
@@ -26,9 +26,9 @@ const tourIcon = (t: string | null) =>
   t === "virtual" ? <Video className="h-2.5 w-2.5" /> : t === "pre-book-pitch" ? <Briefcase className="h-2.5 w-2.5" /> : <Building2 className="h-2.5 w-2.5" />;
 
 export default function TourCalendar() {
-  const [tours, setTours] = useState<SupabaseTour[]>([]);
+  const [tours, setTours] = useState<TourRecord[]>([]);
   const [tcmFilter, setTcmFilter] = useState<string>("all");
-  const [hoveredTour, setHoveredTour] = useState<SupabaseTour | null>(null);
+  const [hoveredTour, setHoveredTour] = useState<TourRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +68,7 @@ export default function TourCalendar() {
   );
 
   const slotMap = useMemo(() => {
-    const map: Record<string, SupabaseTour[]> = {};
+    const map: Record<string, TourRecord[]> = {};
     filtered.forEach((t) => {
       const time = t.time || "";
       const hour = `${time.split(":")[0] || "00"}:00`;
