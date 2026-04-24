@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import connectToDatabase from '@/lib/mongodb';
 import User from '@/models/User';
-import { getAuthUserFromCookie } from '@/lib/auth';
+import { getAuthUserFromCookie, normalizeUsername } from '@/lib/auth';
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,7 +20,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     if (body.fullName) user.fullName = body.fullName.trim();
-    if (body.email) user.email = body.email.trim().toLowerCase();
+    if (body.email) {
+      const newEmail = body.email.trim().toLowerCase();
+      user.email = newEmail;
+      // Auto-update username when email is changed
+      user.username = normalizeUsername(newEmail);
+    }
     if (body.phone) user.phone = body.phone.trim();
     if (body.zones) user.zones = body.zones;
 

@@ -77,6 +77,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         return NextResponse.json({ error: 'Email is already in use' }, { status: 400 });
       }
       member.email = email;
+      // Auto-update username when email is changed
+      member.username = normalizeUsername(email);
     }
 
     if (Array.isArray(body.zones)) {
