@@ -46,6 +46,7 @@ type VisitRow = {
   propertyId?: any;
   assignedStaffId?: any;
   scheduledAt?: string;
+  updatedAt?: string;
   scheduleRemarks?: string | null;
   outcome?: string | null;
   notes?: string | null;
@@ -121,6 +122,14 @@ function parseNum(value: unknown): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    const parsed = readString(value);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
 function formatDatePart(scheduledAt: string | null | undefined) {
   if (!scheduledAt) return null;
   const dt = new Date(scheduledAt);
@@ -152,10 +161,30 @@ function deriveStatus(visit: VisitRow, meta: Record<string, string | null>): str
 function deriveShowUp(visit: VisitRow, meta: Record<string, string | null>): boolean | null {
   const fromMeta = parseBool(meta.show_up);
   if (fromMeta !== null) return fromMeta;
+  const fromArrival = parseBool(meta.tcm_report_arrived);
+  if (fromArrival !== null) return fromArrival;
   const outcome = String(visit.outcome || "").toLowerCase();
   if (outcome === "completed") return true;
   if (outcome === "no_show") return false;
   return null;
+}
+
+function deriveOutcome(visit: VisitRow, meta: Record<string, string | null>): string | null {
+  return firstString(
+    meta.post_outcome,
+    meta.tcm_report_outcome,
+    meta.outcome,
+    visit.outcome
+  );
+}
+
+function deriveRemarks(visit: VisitRow, meta: Record<string, string | null>): string | null {
+  return firstString(
+    visit.scheduleRemarks,
+    meta.tcm_report_notes,
+    meta.tour_remarks,
+    meta.remarks
+  );
 }
 
 function visitToTour(visit: VisitRow): TourRecord {
@@ -167,22 +196,22 @@ function visitToTour(visit: VisitRow): TourRecord {
 
   return {
     id,
-    name: readString((lead as any)?.name) ?? readString(meta.name),
-    phone: readString((lead as any)?.phone) ?? readString(meta.phone),
-    property: readString((prop as any)?.name) ?? readString(meta.property) ?? readString(meta.typed_property),
-    area: readString(meta.area) ?? readString(meta.zone),
-    date: readString(meta.date) ?? formatDatePart(visit.scheduledAt),
-    time: readString(meta.time) ?? formatTimePart(visit.scheduledAt),
+    name: firstString((lead as any)?.name, meta.name),
+    phone: firstString((lead as any)?.phone, meta.phone),
+    property: firstString((prop as any)?.name, meta.property, meta.typed_property),
+    area: firstString(meta.area, (prop as any)?.area, (lead as any)?.zone, meta.zone),
+    date: firstString(meta.date, meta.tour_date, formatDatePart(visit.scheduledAt)),
+    time: firstString(meta.time, meta.slot, formatTimePart(visit.scheduledAt)),
     status: deriveStatus(visit, meta),
-    source: readString(meta.source),
-    tcm_name: readString((member as any)?.name) ?? readString((member as any)?.fullName) ?? readString(meta.assigned_to),
+    source: firstString(meta.source, (lead as any)?.source),
+    tcm_name: firstString((member as any)?.name, (member as any)?.fullName, meta.assigned_to),
     show_up: deriveShowUp(visit, meta),
-    outcome: readString(meta.post_outcome),
-    remarks: readString(visit.scheduleRemarks) ?? readString(meta.tour_remarks) ?? readString(meta.remarks),
+    outcome: deriveOutcome(visit, meta),
+    remarks: deriveRemarks(visit, meta),
     score: parseNum(meta.score),
     intent: readString(meta.intent),
-    budget: parseNum(meta.budget),
-    move_in_date: readString(meta.move_in_date),
+    budget: parseNum(meta.budget) ?? parseNum((lead as any)?.budget),
+    move_in_date: firstString(meta.move_in_date, (lead as any)?.moveInDate),
     tour_type: readString(meta.tour_type),
     zone: readString(meta.zone),
     work_college: readString(meta.work_college),
@@ -193,9 +222,9 @@ function visitToTour(visit: VisitRow): TourRecord {
     comparing: parseBool(meta.comparing),
     needs_family: parseBool(meta.needs_family),
     key_concern: readString(meta.key_concern),
-    slot: readString(meta.slot),
+    slot: firstString(meta.slot, meta.time, formatTimePart(visit.scheduledAt)),
     live_score: parseNum(meta.live_score),
-    created_at: readString(visit.createdAt) ?? readString(visit.scheduledAt),
+    created_at: firstString(visit.updatedAt, visit.createdAt, visit.scheduledAt),
   };
 }
 
