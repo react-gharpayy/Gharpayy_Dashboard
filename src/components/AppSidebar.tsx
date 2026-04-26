@@ -3,7 +3,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Kanban, CalendarCheck, BarChart3, Settings,
   MessageSquare, History, Trophy, X, Moon, Sun, Building2, Bed, TrendingUp,
-  Map, Sparkles, Receipt, Globe, UserCircle, LogOut
+  Map, Sparkles, Receipt, Globe, UserCircle, LogOut, ClipboardList,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,6 +20,10 @@ const demandItems = [
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/historical', icon: History, label: 'Historical' },
   { to: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
+  { to: '/tours-live', icon: ClipboardList, label: 'Tours Live' },
+  { to: '/myt/tours', icon: CalendarCheck, label: 'Tours' },
+  { to: '/myt/schedule', icon: ClipboardList, label: 'Schedule' },
+  { to: '/myt/calendar', icon: History, label: 'Calendar' },
 ];
 
 const supplyItems = [

@@ -1,34 +1,40 @@
-import { cn } from "@/lib/utils";
+"use client";
 
-type Intent = "hard" | "warm" | "soft";
+import { Intent } from '@/myt/lib/types';
+import { cn } from '@/lib/utils';
 
-type ConfidenceBarProps = {
+interface Props {
   score: number;
   intent: Intent;
-  showLabel?: boolean;
   className?: string;
-};
+  showLabel?: boolean;
+}
 
-const trackColor: Record<Intent, string> = {
-  hard: "bg-emerald-500",
-  warm: "bg-amber-500",
-  soft: "bg-slate-400",
-};
+export function ConfidenceBar({ score, intent, className, showLabel = true }: Props) {
+  const fill =
+    intent === 'hard'
+      ? 'bg-role-tcm'
+      : intent === 'medium'
+      ? 'bg-role-hr'
+      : 'bg-muted-foreground';
 
-export function ConfidenceBar({ score, intent, showLabel = true, className }: ConfidenceBarProps) {
-  const clamped = Math.max(0, Math.min(100, Number(score || 0)));
+  const label =
+    intent === 'hard' ? 'HARD' : intent === 'medium' ? 'MEDIUM' : 'SOFT';
 
   return (
-    <div className={cn("w-full", className)}>
-      {showLabel && (
-        <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
-          <span>Confidence</span>
-          <span>{clamped}%</span>
-        </div>
-      )}
-      <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
-        <div className={cn("h-full transition-all duration-300", trackColor[intent])} style={{ width: `${clamped}%` }} />
+    <div className={cn('flex items-center gap-2', className)}>
+      <div className="flex-1 h-1.5 rounded-full bg-surface-2 overflow-hidden">
+        <div
+          className={cn('h-full rounded-full transition-all', fill)}
+          style={{ width: `${Math.max(4, score)}%` }}
+        />
       </div>
+      {showLabel && (
+        <span className="text-[10px] font-mono font-semibold tabular-nums text-foreground shrink-0 w-16 text-right">
+          {score}% · {label}
+        </span>
+      )}
     </div>
   );
 }
+

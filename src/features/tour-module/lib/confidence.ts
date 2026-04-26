@@ -1,108 +1,121 @@
-import type { TourIntent, TourQualification } from "@/features/tour-module/lib/types";
+import { Intent, TourQualification, ConfirmationStrength } from './types';
 
-export const intentBg: Record<TourIntent, string> = {
-  hard: "bg-emerald-50 border-emerald-200 text-emerald-800",
-  warm: "bg-amber-50 border-amber-200 text-amber-800",
-  soft: "bg-slate-50 border-slate-200 text-slate-700",
-};
-
-function parseDate(value: string): Date | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
+export interface ConfidenceResult {
+  score: number;
+  intent: Intent;
+  reason: string[];
 }
 
-function daysUntil(value: string): number | null {
-  const target = parseDate(value);
-  if (!target) return null;
+/**
+ * Pure scoring engine. Higher score = higher booking probability.
+ * Uses move-in urgency, budget alignment, intent signals, and decision authority.
+ */
+export function scoreTour(
+  q: TourQualification,
+  budget: number,
+  budgetFloor = 7000
+): ConfidenceResult {
+  let score = 30; // baseline
+  const reason: { weight: number; text: string }[] = [];
 
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const end = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-  return Math.floor((end.getTime() - start.getTime()) / 86400000);
-}
-
-export function scoreTour(qualification: TourQualification, budget: number) {
-  const reasons: string[] = [];
-  let score = 35;
-
-  const moveInDays = daysUntil(qualification.moveInDate);
-  if (moveInDays !== null) {
-    if (moveInDays <= 2) {
-      score += 18;
-      reasons.push("Immediate move-in");
-    } else if (moveInDays <= 7) {
-      score += 10;
-      reasons.push("Move-in this week");
-    } else if (moveInDays <= 21) {
-      score += 4;
-      reasons.push("Move-in planned");
-    }
-  }
-
-  if (qualification.readyIn48h) {
-    score += 18;
-    reasons.push("Ready in 48h");
-  }
-
-  if (qualification.willBookToday === "yes") {
-    score += 15;
-    reasons.push("Likely to book today");
-  } else if (qualification.willBookToday === "maybe") {
-    score += 6;
+  // Move-in urgency
+  const daysToMoveIn = Math.max(
+    0,
+    Math.floor((new Date(q.moveInDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  );
+  if (daysToMoveIn <= 3) {
+    score += 30;
+    reason.push({ weight: 30, text: `Move-in in ${daysToMoveIn}d` });
+  } else if (daysToMoveIn <= 7) {
+    score += 20;
+    reason.push({ weight: 20, text: `Move-in in ${daysToMoveIn}d` });
+  } else if (daysToMoveIn <= 15) {
+    score += 10;
+    reason.push({ weight: 10, text: `Move-in in ${daysToMoveIn}d` });
   } else {
-    score -= 8;
-  }
-
-  if (qualification.exploring) {
-    score -= 8;
-    reasons.push("Still exploring");
-  }
-
-  if (qualification.comparing) {
-    score -= 6;
-    reasons.push("Comparing options");
-  }
-
-  if (qualification.needsFamily) {
+    reason.push({ weight: -5, text: `Move-in ${daysToMoveIn}d away` });
     score -= 5;
-    reasons.push("Family approval pending");
   }
 
-  if (qualification.decisionMaker === "self") {
-    score += 4;
-  } else if (qualification.decisionMaker === "parent") {
-    score -= 2;
+  // Budget alignment
+  if (budget >= budgetFloor) {
+    score += 20;
+    reason.push({ weight: 20, text: 'Budget aligned' });
   } else {
-    score -= 3;
+    score -= 20;
+    reason.push({ weight: -20, text: 'Budget below floor' });
   }
 
-  if (budget >= 20000) {
+  // Closing question
+  if (q.willBookToday === 'yes') {
+    score += 15;
+    reason.push({ weight: 15, text: 'Will book today' });
+  } else if (q.willBookToday === 'maybe') {
     score += 5;
-    reasons.push("Healthy budget");
-  } else if (budget > 0 && budget < 9000) {
-    score -= 4;
+  } else if (q.willBookToday === 'no') {
+    score -= 10;
+    reason.push({ weight: -10, text: 'Won\'t book today' });
   }
 
-  if (qualification.keyConcern?.trim()) {
-    score -= 2;
+  // Intent signals
+  if (q.readyIn48h) {
+    score += 10;
+    reason.push({ weight: 10, text: 'Ready in 48h' });
+  }
+  if (q.exploring) {
+    score -= 15;
+    reason.push({ weight: -15, text: 'Just exploring' });
+  }
+  if (q.comparing) {
+    score -= 10;
+    reason.push({ weight: -10, text: 'Comparing options' });
+  }
+  if (q.needsFamily) {
+    score -= 5;
+    reason.push({ weight: -5, text: 'Needs family approval' });
+  }
+
+  // Decision authority
+  if (q.decisionMaker === 'self') {
+    score += 10;
+    reason.push({ weight: 10, text: 'Final decision maker' });
+  } else if (q.decisionMaker === 'group') {
+    score -= 5;
   }
 
   score = Math.max(0, Math.min(100, score));
 
-  const intent: TourIntent = score >= 75 ? "hard" : score >= 50 ? "warm" : "soft";
-  return { score, intent, reason: reasons.slice(0, 4) };
+  const intent: Intent = score >= 75 ? 'hard' : score >= 45 ? 'medium' : 'soft';
+
+  // Top 3 contributing factors by absolute weight
+  const topReasons = reason
+    .sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight))
+    .slice(0, 3)
+    .map(r => r.text);
+
+  return { score, intent, reason: topReasons };
 }
 
-export function inferConfirmationStrength(qualification: TourQualification): "high" | "medium" | "low" {
-  if (qualification.readyIn48h && qualification.willBookToday === "yes" && !qualification.exploring) {
-    return "high";
-  }
-
-  if (qualification.willBookToday !== "no" && !qualification.comparing) {
-    return "medium";
-  }
-
-  return "low";
+export function inferConfirmationStrength(q: TourQualification): ConfirmationStrength {
+  if (q.willBookToday === 'yes' && q.readyIn48h) return 'strong';
+  if (q.willBookToday === 'no' || q.exploring) return 'weak';
+  return 'tentative';
 }
+
+export const intentColor: Record<Intent, string> = {
+  hard: 'text-role-tcm',
+  medium: 'text-role-hr',
+  soft: 'text-muted-foreground',
+};
+
+export const intentBg: Record<Intent, string> = {
+  hard: 'bg-role-tcm/15 text-role-tcm border-role-tcm/30',
+  medium: 'bg-role-hr/15 text-role-hr border-role-hr/30',
+  soft: 'bg-muted/40 text-muted-foreground border-border',
+};
+
+export const confirmationLabel: Record<ConfirmationStrength, string> = {
+  strong: '✅ Strong',
+  tentative: '⚠️ Tentative',
+  weak: '❌ Weak',
+};
