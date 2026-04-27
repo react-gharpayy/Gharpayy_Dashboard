@@ -127,7 +127,7 @@ export function NotesBox({ notes = [], onAdd, onDelete, compact }: { notes: any[
   );
 }
 
-export function GeoIntelPanel({ lead }: { lead: any }) {
+export function GeoIntelPanel({ lead , pgs }: { lead: any, pgs: any }) {
   const { areaIntel, matchedPark } = enrichLeadGeo(lead);
   if (!areaIntel.length && !matchedPark) return null;
   
